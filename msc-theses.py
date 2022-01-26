@@ -12,6 +12,8 @@ parser.add_argument('-d', '--detail', action='store_true',
                     help='show also authors, titles and issue dates')
 args = parser.parse_args()
 
+years = [ '2021', '2022' ]
+
 theses = {}
 
 def hack_html(html):
@@ -102,10 +104,10 @@ def fetch_theses(max_pages):
                         d = html_to_dict(response.text)
                         if d:
                             #print(i, url, l, d)
-                            rec.append(d)
                             y = d['issued'][:4]
-                            if y=='2022' or y=='2021':
+                            if y in years:
                                 do_break = False                            
+                                rec.append(d)
                         else:
                             print(i, url, l, 'failed')
             else:
@@ -127,9 +129,10 @@ def name_or_alias(n):
     nn = n.split()
     for i in theses.keys():
         mm = i.split()
-        l0 = len(nn[0]) if len(nn[0])<len(mm[0]) else len(mm[0])
-        l1 = len(nn[1]) if len(nn[1])<len(mm[1]) else len(mm[1])
-        if nn[0][:l0]==mm[0][:l0] and nn[1][:l1]==mm[1][:l1]:
+        l0 = len(nn[ 0]) if len(nn[ 0])<len(mm[ 0]) else len(mm[ 0])
+        l1 = len(nn[-1]) if len(nn[-1])<len(mm[-1]) else len(mm[-1])
+        if nn[0][:l0]==mm[0][:l0] and (nn[-1][:l1]==mm[-1][:l1] or
+                                       nn[-1][-l1:]==mm[-1][-l1:]):
             alias[n] = i
             return i
     no_hit.add(n)
@@ -178,3 +181,4 @@ for r in rec:
 
 show_theses(args.detail)
 
+#print(alias)
