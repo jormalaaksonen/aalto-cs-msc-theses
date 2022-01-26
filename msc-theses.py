@@ -131,8 +131,8 @@ def name_or_alias(n):
         mm = i.split()
         l0 = len(nn[ 0]) if len(nn[ 0])<len(mm[ 0]) else len(mm[ 0])
         l1 = len(nn[-1]) if len(nn[-1])<len(mm[-1]) else len(mm[-1])
-        if nn[0][:l0]==mm[0][:l0] and (nn[-1][:l1]==mm[-1][:l1] or
-                                       nn[-1][-l1:]==mm[-1][-l1:]):
+        if (nn[ 0][:l0]==mm[ 0][:l0] or nn[ 0][-l0:]==mm[ 0][-l0:]) and \
+           (nn[-1][:l1]==mm[-1][:l1] or nn[-1][-l1:]==mm[-1][-l1:]):
             alias[n] = i
             return i
     no_hit.add(n)
