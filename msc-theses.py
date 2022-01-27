@@ -80,40 +80,42 @@ def fetch_faculty():
     return l
 
 def fetch_theses(max_pages):
-    print('(Wait... This will continue until offset=430 or even more...)')
     rec = []
-    for i in range(max_pages):
-        url_base = 'https://aaltodoc.aalto.fi'
-        url = url_base+'/handle/123456789/21/recent-submissions'
-        if i>0:
-            url += '?offset='+str(10*i)
-        print('Fetching', url, flush=True)
-        response = requests.request('GET', url)
-        if response.status_code!=200:
-            print(i, url, 'error', response.status_code)
-        else:
-            ll = html_to_links(response.text)
-            do_break = True;
-            if len(ll):
-                #print(i, url, ll)
-                for l in ll:
-                    response = requests.request('GET', url_base+l)
-                    if response.status_code!=200:
-                        print(i, url, l, 'error', response.status_code)
-                    else:
-                        d = html_to_dict(response.text)
-                        if d:
-                            #print(i, url, l, d)
-                            y = d['issued'][:4]
-                            if y in years:
-                                do_break = False                            
-                                rec.append(d)
-                        else:
-                            print(i, url, l, 'failed')
+    maxr = { '21': 430, '22': 200 }
+    for s in [ '21', '22']: # 21=SCI 22=ELEC
+        print('(Wait... This will continue until offset='+str(maxr[s])+' or even more...)')
+        for i in range(max_pages):
+            url_base = 'https://aaltodoc.aalto.fi'
+            url = url_base+'/handle/123456789/'+s+'/recent-submissions'
+            if i>0:
+                url += '?offset='+str(10*i)
+            print('Fetching', url, flush=True)
+            response = requests.request('GET', url)
+            if response.status_code!=200:
+                print(i, url, 'error', response.status_code)
             else:
-                print(i, url, 'failed')
-            if do_break:
-                break
+                ll = html_to_links(response.text)
+                do_break = True;
+                if len(ll):
+                    #print(i, url, ll)
+                    for l in ll:
+                        response = requests.request('GET', url_base+l)
+                        if response.status_code!=200:
+                            print(i, url, l, 'error', response.status_code)
+                        else:
+                            d = html_to_dict(response.text)
+                            if d:
+                                #print(i, url, l, d)
+                                y = d['issued'][:4]
+                                if y in years:
+                                    do_break = False
+                                    rec.append(d)
+                            else:
+                                print(i, url, l, 'failed')
+                else:
+                    print(i, url, 'failed')
+                if do_break:
+                    break
     return rec
 
 no_hit = set()
