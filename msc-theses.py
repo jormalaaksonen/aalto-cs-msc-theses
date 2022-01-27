@@ -110,6 +110,7 @@ def fetch_theses(max_pages):
                                 #print(i, url, l, d)
                                 y = d['issued'][:4]
                                 if y in years:
+                                    d['school'] = s[1]
                                     do_break = False
                                     rec.append(d)
                             else:
@@ -150,7 +151,7 @@ def match_record(r):
         if a is not None:
             f.add(a)
     for n in f:
-        e = (swap_name(r['creator']), r['title'], r['issued'])
+        e = (swap_name(r['creator']), r['title'], r['issued'], r['school'])
         theses[n].append(e)
         #print('FOUND', n, ':', *e)
             
@@ -166,7 +167,8 @@ def show_theses(detail):
         sum += i[0]
         if detail:
             for j in theses[i[1]]:
-                print('      {}: {}. {}'.format(*j))
+                s = '' if j[3]=='SCI' else j[3][:3]
+                print('    {:3s} {}: {}. {}'.format(s, *j))
     print('{:3d} {}'.format(sum, 'TOTAL'))
 
 rec = fetch_theses(200)
