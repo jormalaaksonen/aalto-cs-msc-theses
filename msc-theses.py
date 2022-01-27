@@ -37,9 +37,10 @@ def html_to_dict(html):
             if f=='DC.type'and v=="Master's thesis":
                 ok = True
             if f=='DC.title':
-                if title_lang is None or meta.attrib['xml:lang']=='en':
+                l = meta.attrib.get('xml:lang', 'en')
+                if title_lang is None or l=='en':
                     rec['title'] = ' '.join(v.split())
-                    title_lang = meta.attrib['xml:lang']
+                    title_lang = l
             if f=='DC.creator':
                 rec['creator'] = v
             if f=='DCTERMS.issued':
@@ -81,15 +82,16 @@ def fetch_faculty():
 
 def fetch_theses(max_pages):
     rec = []
-    maxr = { '21': 430, '22': 200 }
-    for s in [ '21', '22']: # 21=SCI 22=ELEC
-        print('(Wait... This will continue until offset='+str(maxr[s])+' or even more...)')
+    sch = [ (21, 'SCI', 430), (22, 'ELEC', 200), (18, 'ENG', 320), (23, 'ARTS', 230) ]
+    for s in sch:
+        print('Scraping {} school will continue until offset={} or even longer...'.
+            format(s[1], s[2]))
         for i in range(max_pages):
             url_base = 'https://aaltodoc.aalto.fi'
-            url = url_base+'/handle/123456789/'+s+'/recent-submissions'
+            url = url_base+'/handle/123456789/'+str(s[0])+'/recent-submissions'
             if i>0:
                 url += '?offset='+str(10*i)
-            print('Fetching', url, flush=True)
+            print('  fetching', url, flush=True)
             response = requests.request('GET', url)
             if response.status_code!=200:
                 print(i, url, 'error', response.status_code)
