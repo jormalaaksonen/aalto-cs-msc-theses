@@ -82,7 +82,7 @@ def fetch_faculty():
 
 def fetch_theses(max_pages):
     rec = []
-    sch = [ (21, 'SCI', 430), (22, 'ELEC', 200), (18, 'ENG', 320), (23, 'ARTS', 230) ]
+    sch = [ (21, 'SCI', 430), (22, 'ELEC', 200), (18, 'ENG', 320), (23, 'ARTS', 360) ]
     for s in sch:
         print('Scraping {} school will continue until offset={} or even longer...'.
             format(s[1], s[2]))
@@ -172,8 +172,8 @@ def show_theses(detail):
     print('{:3d} {}'.format(sum, 'TOTAL'))
 
 rec = fetch_theses(200)
-#open('dump.json', 'w').write(json.dumps(rec))
-#rec = json.loads(open('dump.json').read())
+#open('rec.json', 'w').write(json.dumps(rec))
+#rec = json.loads(open('rec.json').read())
 #print(rec)
 
 people = fetch_faculty()
@@ -184,6 +184,8 @@ for p in people:
 
 for r in rec:
     match_record(r)
+
+#open('theses.json', 'w').write(json.dumps(theses))
 
 show_theses(args.detail)
 
