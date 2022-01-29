@@ -125,12 +125,13 @@ no_hit = set()
 alias  = {}
 
 def name_or_alias(n):
-    if n in theses:
-        return n
     if n in alias:
         return alias[n]
     if n in no_hit:
         return None
+    if n in theses:
+        alias[n] = n
+        return n
     nn = n.split()
     for i in theses.keys():
         mm = i.split()
@@ -186,6 +187,9 @@ for r in rec:
     match_record(r)
 
 #open('theses.json', 'w').write(json.dumps(theses))
+#theses = json.loads(open('theses.json').read())
+#open('alias.json', 'w').write(json.dumps(alias))
+#alias = json.loads(open('alias.json').read())
 
 show_theses(args.detail)
 
