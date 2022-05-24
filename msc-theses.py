@@ -10,9 +10,44 @@ parser = argparse.ArgumentParser(description='Aalto CS Dept M.Sc. Thesis listing
                                  +'per supervisor in 2021-22')
 parser.add_argument('-d', '--detail', action='store_true',
                     help='show also authors, titles and issue dates')
+parser.add_argument('-r', '--rec', type=str, choices=['dump', 'load'],
+                    help='either dumps or loads rec structure to/from json')
+parser.add_argument('-a', '--alias', type=str, choices=['dump', 'load'],
+                    help='either dumps or loads alias structure to/from json')
+parser.add_argument('-t', '--theses', type=str, choices=['dump', 'load'],
+                    help='either dumps or loads theses structure to/from json')
 args = parser.parse_args()
 
 years = [ '2021', '2022' ]
+
+long_names = { 'aat'   : 'Acoustics and Audio Technology',
+               'cs'    : 'Computer Science',
+               'cs/al' : 'Computer Science / Algorithms, Logic, and Computation',
+               'cs/bd' : 'Computer Science / Big Data and Large-Scale Computing',
+               'cs/ss' : 'Computer Science / Software Systems and Technologies',
+               'cs/wt' : 'Computer Science / Web Technologies, Application and Science',
+               'game'  : 'Game Desing and Production',
+               'hci'   : 'Human-Computer Interaction',
+               'mac'   : 'Macadamia',
+               'sec'   : 'Security and Cloud Computing',
+               'sse'   : 'Software and Service Engineering',
+               'sse/es': 'Software and Service Engineering / Enterprise Systems',
+               'sse/sd': 'Software and Service Engineering / Service Design and Engineering',
+               'sse/se': 'Software and Service Engineering / Software Engineering',
+               'inf'   : 'Information Networks',
+               'lstbi' : 'Life Science Bioinformatics and Digital Health',
+               'lstbs' : 'Life Science Biosensing and Bioelectronics',
+               'lstcs' : 'Life Science Complex Systems',
+               'eitcn' : 'EIT Cloud and Network Infrastructures',
+               'eitds' : 'EIT Data Science',
+               'eithc' : 'EIT HCID',
+               'eitvc' : 'EIT Visual Computing and Communication',
+               'unk'   : 'unknown major'
+              }
+majors = {}
+
+alias  = {
+}
 
 theses = {}
 
@@ -65,6 +100,7 @@ def swap_name(n):
     return n[p+2:]+' '+n[:p]
     
 def fetch_faculty():
+    print('Scraping names of Aalto CS faculty members')
     url = 'https://www.aalto.fi/en/department-of-computer-science/faculty-members'
     response = requests.request('GET', url)
     if response.status_code!=200:
@@ -72,6 +108,8 @@ def fetch_faculty():
     html = response.text
     #html = open('f.html').read()
     l = []
+    for k, v in alias.items():
+        l.append(v)
     restree = lxml_html.fromstring(hack_html(html))
     tree    = lxml_etree.ElementTree(restree)
     for a in restree.xpath("//a[@class='aalto-profile-card__name-link']"):
@@ -82,7 +120,7 @@ def fetch_faculty():
 
 def fetch_theses(max_pages):
     rec = []
-    sch = [ (21, 'SCI', 430), (22, 'ELEC', 200), (18, 'ENG', 320), (23, 'ARTS', 360) ]
+    sch = [ (21, 'SCI', 580), (22, 'ELEC', 260), (18, 'ENG', 430), (23, 'ARTS', 400) ]
     for s in sch:
         print('Scraping {} school will continue until offset={} or even longer...'.
             format(s[1], s[2]))
@@ -122,16 +160,12 @@ def fetch_theses(max_pages):
     return rec
 
 no_hit = set()
-alias  = {}
 
 def name_or_alias(n):
     if n in alias:
         return alias[n]
     if n in no_hit:
         return None
-    if n in theses:
-        alias[n] = n
-        return n
     nn = n.split()
     for i in theses.keys():
         mm = i.split()
@@ -155,16 +189,115 @@ def match_record(r):
         e = (swap_name(r['creator']), r['title'], r['issued'], r['school'])
         theses[n].append(e)
         #print('FOUND', n, ':', *e)
+
+def find_names(t):
+    f = set()
+    for a in alias.keys():
+        if t.find(a)>0:
+            f.add(alias[a])
+    return f
+        
+def add_to_majors(a, i):
+    if a not in majors:
+        majors[a] = set()
+    majors[a].add(i)
+
+def find_majors():
+    m = { 'aat'  : 'ccis/Acoustics+and+Audio+Technology+%28AAT%29',
+          'cs'   : 'ccis/Computer+Science+%28CS%29',
+          'game' : 'ccis/Game+Design+and+Production+%28Game%29', 
+          'hci'  : 'ccis/Human-Computer+Interaction+%28HCI%29',
+          'mac'  : 'ccis/Machine+Learning%2C+Data+Science+and+Artificial+Intelligence+%28Macadamia%29',
+          'sec'  : 'ccis/Security+and+Cloud+Computing+%28Security%29',
+          'sse'  : 'ccis/Software+and+Service+Engineering+%28SSE%29',
+          'inf'  : 'inf/Major',
+          'lstbi': 'lst/Bioinformatics+and+Digital+Health',
+          'lstbs': 'lst/Biosensing+and+Bioelectronics',
+          'lstcs': 'lst/Complex+Systems',
+          'eitcn': 'eitictinno/Cloud+and+Network+Infrastructures',
+          'eitds': 'eitictinno/Data+Science',
+          'eithc': 'eitictinno/Human+Computer+Interaction+and+Design',
+          'eitvc': 'eitictinno/Visual+Computing+and+Communication'
+         }
+
+    t = { 'cs' : [ 'cs/al', 'cs/bd', 'cs/ss',  'cs/wt'],
+          'sse': [ 'sse/es', 'sse/sd', 'sse/se' ] }
+    
+    for i, u in m.items():
+        url = 'https://into.aalto.fi/display/en'+u+'+2020-2022'
+        print('Scraping faculty members in {} ({})'.format(long_names[i], i), url,
+              flush=True)
+        response = requests.request('GET', url)
+        if response.status_code!=200:
+            print('Reading {} failed'.format(url))
+            continue
+        f = find_names(response.text)
+        print('  found:', ', '.join(sorted(f)))
+        for a in f:
+            add_to_majors(a, i)
+        if i in t:
+            print('Splitting {} in tracks'.format(long_names[i]), flush=True)
+            restree = lxml_html.fromstring(response.text)
+            tree    = lxml_etree.ElementTree(restree)
+            for div in restree.xpath("//div[@class='expand-container conf-macro output-block']"):
+                v = lxml_etree.tostring(div, encoding='unicode')
+                for j in t[i]:
+                    s = long_names[j][len(long_names[i])+3:]
+                    if v.find('>'+s+'<')>0:
+                        f = find_names(v)
+                        for a in f:
+                            add_to_majors(a, j)
+                        print('  {} ({}) found: {}'.format(s, j,', '.join(sorted(f))))
+
+scholar = {}
+                        
+def find_h_indices():
+    for n in alias:
+        if alias[n] in scholar:
+            continue
+        nx = n.replace(' ', '+')
+        url = 'https://scholar.google.com/scholar?q='+nx
+        response = requests.request('GET', url)
+        if response.status_code!=200:
+            print('Reading {} failed'.format(url))
+            continue
+        restrees = lxml_html.fromstring(response.text)
+        trees    = lxml_etree.ElementTree(restrees)
+        h_index = None
+        for a in restrees.xpath("//h4[@class='gs_rt2']/a"):
+            href = a.attrib['href']
+            #print(a, href)
+            if href.find('&')>0:
+                href = 'https://scholar.google.com'+href[:href.find('&')]
+                #print(href)
+                response = requests.request('GET', href)
+                if response.status_code!=200:
+                    print('Reading {} failed'.format(url))
+                    continue
+                aalto = response.text.lower().find('aalto')>0
+                if aalto:
+                    restreep = lxml_html.fromstring(response.text)
+                    treep    = lxml_etree.ElementTree(restreep)
+                    val = []
+                    for td in restreep.xpath("//td[@class='gsc_rsb_std']"):
+                        val.append(int(td.text))
+                    h_index = val[2]
+                    break
+                
+        print('{} ({}) {} {}'.format(alias[n], n, h_index, href))
+        if h_index:
+            scholar[alias[n]] = (h_index, href)
             
 def show_theses(detail):
     counts = []
     for p in people:
-        counts.append((len(theses[p]), p))
+        m = ' '.join(sorted(majors[p])) if p in majors else ''
+        counts.append((len(theses[p]), p, m))
     counts.sort(reverse=True)
     #print(counts)
     sum = 0
     for i in counts:
-        print('{:3d} {}'.format(*i))
+        print('{:3d} {} ({})'.format(*i))
         sum += i[0]
         if detail:
             for j in theses[i[1]]:
@@ -172,9 +305,60 @@ def show_theses(detail):
                 print('    {:3s} {}: {}. {}'.format(s, *j))
     print('{:3d} {}'.format(sum, 'TOTAL'))
 
-rec = fetch_theses(200)
-#open('rec.json', 'w').write(json.dumps(rec))
-#rec = json.loads(open('rec.json').read())
+split = {}
+
+def split_theses():
+    for i, j in theses.items():
+        if i not in majors:
+            add_to_majors(i, 'unk')
+        n = len(j)
+        d = 0
+        t = set()
+        for m in majors[i]:
+            if '/' not in m:
+                d += 1
+            else:
+                t.add(m)
+        e = d*len(t)
+        # print(i, n, majors[i], d, t)
+        for m in majors[i]:
+            if m not in split:
+                split[m] = { 'theses': [] }
+            if '/' not in m:
+                split[m]['theses'].append((i, n/d, 1/d))
+            else:
+                split[m]['theses'].append((i, n/e, 1/e))
+
+def show_summary():
+    #print(split)
+    for m in split:
+        s = 0
+        p = 0
+        for i, j, k in split[m]['theses']:
+            #print('XX', m, i, j)
+            s += j
+            p += k
+        split[m]['total']  = s
+        split[m]['size']   = p
+        split[m]['percap'] = split[m]['total'] / split[m]['size']
+        #print('XX', m, split[m]['total'], split[m]['size'],  split[m]['percap'])
+    counts = []
+    for m, n in split.items():
+        counts.append((m, n))
+    for m, n in sorted(counts):
+        print('{:6s} {:42s} {:5.2f} {:5.2f} {:5.2f}'.
+              format(m, long_names[m][0:42], n['total'], n['size'], n['percap']))
+    
+# -----------------------------------------------------------------------------
+
+if args.rec is None or args.rec=='dump':
+    rec = fetch_theses(200)
+if args.rec=='dump':
+    open('rec.json', 'w').write(json.dumps(rec))
+    print('Dumped to rec.json')
+if args.rec=='load':
+    rec = json.loads(open('rec.json').read())
+    print('Loaded from rec.json')
 #print(rec)
 
 people = fetch_faculty()
@@ -182,15 +366,33 @@ people = fetch_faculty()
 
 for p in people:
     theses[p] = []
+    alias[p]  = p
 
-for r in rec:
-    match_record(r)
+if args.theses!='load':
+    print('Matching {} records with {} faculty members'.format(len(rec), len(people)))
+    for r in rec:
+        match_record(r)
 
-#open('theses.json', 'w').write(json.dumps(theses))
-#theses = json.loads(open('theses.json').read())
-#open('alias.json', 'w').write(json.dumps(alias))
-#alias = json.loads(open('alias.json').read())
+if args.theses=='dump':
+    open('theses.json', 'w').write(json.dumps(theses))
+    print('Dumped to theses.json')
+if args.theses=='load':
+    theses = json.loads(open('theses.json').read())
+    print('Loaded from theses.json')
+
+if args.alias=='dump':
+    open('alias.json', 'w').write(json.dumps(alias))
+    print('Dumped to alias.json')
+if args.alias=='load':
+    for i, j in json.loads(open('alias.json').read()).items():
+        alias[i] = j
+
+find_majors()
+
+#find_h_indices()
 
 show_theses(args.detail)
 
-#print(alias)
+split_theses()
+
+show_summary()
