@@ -6,19 +6,9 @@ import argparse
 from lxml import html  as lxml_html
 from lxml import etree as lxml_etree
 
-parser = argparse.ArgumentParser(description='Aalto CS Dept M.Sc. Thesis listing '
-                                 +'per supervisor in 2021-22')
-parser.add_argument('-d', '--detail', action='store_true',
-                    help='show also authors, titles and issue dates')
-parser.add_argument('-r', '--rec', type=str, choices=['dump', 'load'],
-                    help='either dumps or loads rec structure to/from json')
-parser.add_argument('-a', '--alias', type=str, choices=['dump', 'load'],
-                    help='either dumps or loads alias structure to/from json')
-parser.add_argument('-t', '--theses', type=str, choices=['dump', 'load'],
-                    help='either dumps or loads theses structure to/from json')
-args = parser.parse_args()
+years = [ '2021', '2022', '2023' ]
 
-years = [ '2021', '2022' ]
+school_info = [ (21, 'SCI', 930), (22, 'ELEC', 450), (18, 'ENG', 670), (23, 'ARTS', 710) ]
 
 long_names = { 'aat'   : 'Acoustics and Audio Technology',
                'cs'    : 'Computer Science',
@@ -99,6 +89,10 @@ def swap_name(n):
     p = n.find(', ')
     return n[p+2:]+' '+n[:p]
     
+def swap_name_not(n):
+    p = n.find(', ')
+    return n[:p]+n[p+1:] if p>0 else None
+    
 def fetch_faculty():
     print('Scraping names of Aalto CS faculty members')
     url = 'https://www.aalto.fi/en/department-of-computer-science/faculty-members'
@@ -115,15 +109,14 @@ def fetch_faculty():
     for a in restree.xpath("//a[@class='aalto-profile-card__name-link']"):
         n = a.text.strip()
         #print(a, n)
-        l.append(n)
+        if n not in l:
+            l.append(n)
     return l
 
-def fetch_theses(max_pages):
+def fetch_theses(max_pages, dump_raw):
     rec = []
-    sch = [ (21, 'SCI', 580), (22, 'ELEC', 260), (18, 'ENG', 430), (23, 'ARTS', 400) ]
-    for s in sch:
-        print('Scraping {} school will continue until offset={} or even longer...'.
-            format(s[1], s[2]))
+    for s in school_info:
+        print(f'Scraping {s[1]} school will continue until offset={s[2]} or even longer...')
         for i in range(max_pages):
             url_base = 'https://aaltodoc.aalto.fi'
             url = url_base+'/handle/123456789/'+str(s[0])+'/recent-submissions'
@@ -137,12 +130,19 @@ def fetch_theses(max_pages):
                 ll = html_to_links(response.text)
                 do_break = True;
                 if len(ll):
+                    rawi = 0
                     #print(i, url, ll)
                     for l in ll:
                         response = requests.request('GET', url_base+l)
                         if response.status_code!=200:
                             print(i, url, l, 'error', response.status_code)
                         else:
+                            if dump_raw:
+                                ofilen = url.replace('/', '_').replace('?', '_')+'_'+str(rawi)+'.html'
+                                ofile = open(ofilen, 'w')
+                                print(response.text, file=ofile)
+                                print(f'   ... dumped raw HTML in {ofilen}')
+                                rawi += 1
                             d = html_to_dict(response.text)
                             if d:
                                 #print(i, url, l, d)
@@ -185,6 +185,11 @@ def match_record(r):
         a = name_or_alias(n)
         if a is not None:
             f.add(a)
+        else: ## odd cases "firstname, familyname"
+            n = swap_name_not(p)
+            a = name_or_alias(n)
+            if a is not None:
+                f.add(a)
     for n in f:
         e = (swap_name(r['creator']), r['title'], r['issued'], r['school'])
         theses[n].append(e)
@@ -351,48 +356,79 @@ def show_summary():
     
 # -----------------------------------------------------------------------------
 
-if args.rec is None or args.rec=='dump':
-    rec = fetch_theses(200)
-if args.rec=='dump':
-    open('rec.json', 'w').write(json.dumps(rec))
-    print('Dumped to rec.json')
-if args.rec=='load':
-    rec = json.loads(open('rec.json').read())
-    print('Loaded from rec.json')
-#print(rec)
+# print(html_to_dict(open('zzz.html').read()))
 
-people = fetch_faculty()
-#print(people)
+if __name__=="__main__":
+    parser = argparse.ArgumentParser(description='Aalto CS Dept M.Sc. Thesis listing '
+                                     +'per supervisor in 2021-23')
+    parser.add_argument('-d', '--detail', action='store_true',
+                        help='show also authors, titles and issue dates')
+    parser.add_argument('-r', '--rec', type=str, choices=['dump', 'load'],
+                        help='either dumps or loads rec structure to/from json')
+    parser.add_argument('-a', '--alias', type=str, choices=['dump', 'load'],
+                        help='either dumps or loads alias structure to/from json')
+    parser.add_argument('-p', '--person', type=str, 
+                        help='add names or aliases, format "FName SName" or "Alias:Canonical", multiple comma separated')
+    parser.add_argument('-t', '--theses', type=str, choices=['dump', 'load'],
+                        help='either dumps or loads theses structure to/from json')
+    parser.add_argument('--raw', action='store_true',
+                        help='store raw HTML files for error hunting')
+    args = parser.parse_args()
 
-for p in people:
-    theses[p] = []
-    alias[p]  = p
+    if args.person:
+        l = args.person.split(',')
+        for i in l:
+            x = i.split(':')
+            assert len(x)<3
+            ali = x[0].strip()
+            can = (x[1] if len(x)>1 and len(x[1])>1 else x[0]).strip()
+            #print(f'[{ali}]->[{can}]')
+            alias[ali] = can
+        # print(f'aliases: {alias}')
 
-if args.theses!='load':
-    print('Matching {} records with {} faculty members'.format(len(rec), len(people)))
-    for r in rec:
-        match_record(r)
+    if args.rec is None or args.rec=='dump':
+        rec = fetch_theses(200, args.raw)
+    if args.rec=='dump':
+        open('rec.json', 'w').write(json.dumps(rec))
+        print('Dumped to rec.json')
+    if args.rec=='load':
+        rec = json.loads(open('rec.json').read())
+        print('Loaded from rec.json')
+    #print(rec)
 
-if args.theses=='dump':
-    open('theses.json', 'w').write(json.dumps(theses))
-    print('Dumped to theses.json')
-if args.theses=='load':
-    theses = json.loads(open('theses.json').read())
-    print('Loaded from theses.json')
+    people = fetch_faculty()
+    #print(people)
 
-if args.alias=='dump':
-    open('alias.json', 'w').write(json.dumps(alias))
-    print('Dumped to alias.json')
-if args.alias=='load':
-    for i, j in json.loads(open('alias.json').read()).items():
-        alias[i] = j
+    for p in people:
+        theses[p] = []
+        alias[p]  = p
 
-find_majors()
+    if args.theses!='load':
+        print('Matching {} records with {} faculty members'.format(len(rec), len(people)))
+        for r in rec:
+            match_record(r)
 
-#find_h_indices()
+    if args.theses=='dump':
+        open('theses.json', 'w').write(json.dumps(theses))
+        print('Dumped to theses.json')
+    if args.theses=='load':
+        theses = json.loads(open('theses.json').read())
+        print('Loaded from theses.json')
 
-show_theses(args.detail)
+    if args.alias=='dump':
+        open('alias.json', 'w').write(json.dumps(alias))
+        print('Dumped to alias.json')
+    if args.alias=='load':
+        for i, j in json.loads(open('alias.json').read()).items():
+            alias[i] = j
 
-split_theses()
+    find_majors()
 
-show_summary()
+    #find_h_indices()
+
+    show_theses(args.detail)
+
+    split_theses()
+
+    show_summary()
+
