@@ -8,7 +8,7 @@ from lxml import etree as lxml_etree
 
 years = [ '2021', '2022', '2023' ]
 
-school_info = [ (21, 'SCI', 930), (22, 'ELEC', 450), (18, 'ENG', 670), (23, 'ARTS', 710) ]
+school_info = [ (21, 'SCI', 970), (22, 'ELEC', 470), (18, 'ENG', 690), (23, 'ARTS', 750) ]
 
 long_names = { 'aat'   : 'Acoustics and Audio Technology',
                'cs'    : 'Computer Science',
@@ -136,6 +136,8 @@ def fetch_theses(max_pages, dump_raw):
                         response = requests.request('GET', url_base+l)
                         if response.status_code!=200:
                             print(i, url, l, 'error', response.status_code)
+                        elif response.text=='':
+                            print(i, url, l, 'empty doc', response.status_code)
                         else:
                             if dump_raw:
                                 ofilen = url.replace('/', '_').replace('?', '_')+'_'+str(rawi)+'.html'
@@ -361,6 +363,8 @@ def show_summary():
 if __name__=="__main__":
     parser = argparse.ArgumentParser(description='Aalto CS Dept M.Sc. Thesis listing '
                                      +'per supervisor in 2021-23')
+    parser.add_argument('-y', '--years', type=str,
+                        help='select years (comma-separated)')
     parser.add_argument('-d', '--detail', action='store_true',
                         help='show also authors, titles and issue dates')
     parser.add_argument('-r', '--rec', type=str, choices=['dump', 'load'],
@@ -375,6 +379,9 @@ if __name__=="__main__":
                         help='store raw HTML files for error hunting')
     args = parser.parse_args()
 
+    if args.years:
+        years = args.years.split(',')
+    
     if args.person:
         l = args.person.split(',')
         for i in l:
