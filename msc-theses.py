@@ -3,6 +3,7 @@
 import requests
 import json
 import argparse
+import os
 from lxml import html  as lxml_html
 from lxml import etree as lxml_etree
 
@@ -34,6 +35,9 @@ long_names = { 'aat'   : 'Acoustics and Audio Technology',
                'eitvc' : 'EIT Visual Computing and Communication',
                'unk'   : 'unknown major'
               }
+
+use_cache = True
+
 majors = {}
 
 alias  = {
@@ -114,6 +118,7 @@ def fetch_faculty():
     return l
 
 def fetch_theses(max_pages, dump_raw):
+    debug = False
     rec = []
     for s in school_info:
         print(f'Scraping {s[1]} school will continue until offset={s[2]} or even longer...')
@@ -133,19 +138,35 @@ def fetch_theses(max_pages, dump_raw):
                     rawi = 0
                     #print(i, url, ll)
                     for l in ll:
-                        response = requests.request('GET', url_base+l)
-                        if response.status_code!=200:
-                            print(i, url, l, 'error', response.status_code)
-                        elif response.text=='':
-                            print(i, url, l, 'empty doc', response.status_code)
+                        urlx  = url_base+l
+                        cfile = 'cache/'+l.split('/')[-1]
+                        text  = None
+                        #print(l, urlx, cfile)
+                        if use_cache and os.path.isfile(cfile) and os.path.getsize(cfile):
+                            text = open(cfile).read()
+                            if debug:
+                                print(f'    read cached     {cfile} -> {urlx}')
                         else:
-                            if dump_raw:
-                                ofilen = url.replace('/', '_').replace('?', '_')+'_'+str(rawi)+'.html'
-                                ofile = open(ofilen, 'w')
-                                print(response.text, file=ofile)
-                                print(f'   ... dumped raw HTML in {ofilen}')
-                                rawi += 1
-                            d = html_to_dict(response.text)
+                            response = requests.request('GET', urlx)
+                            if response.status_code!=200:
+                                print(i, url, l, 'error', response.status_code)
+                            elif response.text=='':
+                                print(i, url, l, 'empty doc', response.status_code)
+                            else:
+                                if dump_raw:
+                                    ofilen = url.replace('/', '_').replace('?', '_')+'_'+str(rawi)+'.html'
+                                    ofile = open(ofilen, 'w')
+                                    print(response.text, file=ofile)
+                                    print(f'   ... dumped raw HTML in {ofilen}')
+                                    rawi += 1
+                                text = response.text
+                                if use_cache:
+                                    open(cfile, 'wb').write(text.encode())
+                                    if debug:
+                                        print(f'    stored in cache {cfile} <- {urlx}')
+                            
+                        if text:
+                            d = html_to_dict(text)
                             if d:
                                 #print(i, url, l, d)
                                 y = d['issued'][:4]
@@ -379,6 +400,11 @@ if __name__=="__main__":
                         help='store raw HTML files for error hunting')
     args = parser.parse_args()
 
+    if use_cache and not os.path.isdir('cache'):
+        if not os.mkdir('cache'):
+            print('Failed to create cache directory.')
+            use_cache = False
+    
     if args.years:
         years = args.years.split(',')
     
