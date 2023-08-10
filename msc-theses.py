@@ -9,7 +9,7 @@ from lxml import etree as lxml_etree
 
 years = [ '2021', '2022', '2023' ]
 
-school_info = [ (21, 'SCI', 970), (22, 'ELEC', 470), (18, 'ENG', 690), (23, 'ARTS', 750) ]
+school_info = [ (21, 'SCI', 1070), (22, 'ELEC', 530), (18, 'ENG', 770), (23, 'ARTS', 820) ]
 
 long_names = { 'aat'   : 'Acoustics and Audio Technology',
                'cs'    : 'Computer Science',
@@ -98,8 +98,8 @@ def swap_name_not(n):
     return n[:p]+n[p+1:] if p>0 else None
     
 def fetch_faculty():
-    print('Scraping names of Aalto CS faculty members')
     url = 'https://www.aalto.fi/en/department-of-computer-science/faculty-members'
+    print(f'Scraping names of Aalto CS faculty members from {url}')
     response = requests.request('GET', url)
     if response.status_code!=200:
         return None
@@ -455,7 +455,7 @@ if __name__=="__main__":
         for i, j in json.loads(open('alias.json').read()).items():
             alias[i] = j
 
-    find_majors()
+    #find_majors()
 
     #find_h_indices()
 
