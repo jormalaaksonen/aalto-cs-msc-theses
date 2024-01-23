@@ -7,7 +7,7 @@ import os
 from lxml import html  as lxml_html
 from lxml import etree as lxml_etree
 
-years = [ '2021', '2022', '2023' ]
+years = [ '2021', '2022', '2023', '2024' ]
 
 school_info = [ (21, 'SCI', 1180), (22, 'ELEC', 590), (18, 'ENG', 860), (23, 'ARTS', 990) ]
 
@@ -36,7 +36,7 @@ long_names = { 'aat'   : 'Acoustics and Audio Technology',
                'unk'   : 'unknown major'
               }
 
-use_cache = True
+use_cache = False
 
 majors = {}
 
@@ -54,38 +54,55 @@ def hack_html(html):
 def html_to_dict(html):
     restree = lxml_html.fromstring(hack_html(html))
     tree    = lxml_etree.ElementTree(restree)
-    rec = { 'contributor': []}
-    ok = False
-    title_lang = None
-    ff = ['DC.creator', 'DC.title', 'DCTERMS.issued',
-          'DC.type', 'DC.contributor']
+    rec = {}
+    ff = ['citation_author', 'citation_title', 'citation_publication_date']
     for f in ff:
-        for meta in restree.xpath("//meta[@name='"+f+"']"):
+        for meta in restree.xpath(f"//meta[@name='{f}']"):
             v = meta.attrib['content']
-            #print(f, v)
-            if f=='DC.type'and v=="Master's thesis":
-                ok = True
-            if f=='DC.title':
-                l = meta.attrib.get('xml:lang', 'en')
-                if title_lang is None or l=='en':
-                    rec['title'] = ' '.join(v.split())
-                    title_lang = l
-            if f=='DC.creator':
+            # print(f, v)
+            if f=='citation_title':
+                rec['title'] = ' '.join(v.split())
+            if f=='citation_author':
                 rec['creator'] = v
-            if f=='DCTERMS.issued':
+            if f=='citation_publication_date':
                 rec['issued'] = v
-            if f=='DC.contributor' and v.find(',')>0:
-                rec['contributor'].append(v)
 
-    return rec if ok else None
+    for div in restree.xpath("//div[@_ngcontent-sc160='' and @class='simple-view-element']"):
+        # print(div)
+        l1 = div.xpath('h5')
+        l2 = div.xpath('div/span')
+        if len(l1)==1 and len(l2)==1:
+            # print(l1[0].text, l2[0].text)
+            k = l1[0].text
+            v = l2[0].text
+            if k=='Major/Subject':
+                rec['major'] = v
+            if k=='Mcode':
+                rec['major_code'] = v
+            if k=='Degree programme':
+                rec['degree_programme'] = v
+            if k=='Language':
+                rec['language'] = v
+            if k=='Pages':
+                rec['pages'] = v
+
+    l = restree.xpath("//ds-aalto-item-supervisor")
+    print('Z', len(l))
+    #assert len(l)==1, 'failed with supervisor'
+    #v = l.xpath('div/h5').tail
+    #rec['supervisor'] = v
+                
+    print(rec)
+    exit(0)
+    return rec
 
 def html_to_links(html):
     l = []
     restree = lxml_html.fromstring(hack_html(html))
     tree    = lxml_etree.ElementTree(restree)
-    for a in restree.xpath("//span[@class='content']/a"):
+    for a in restree.xpath("//div[@_ngcontent-sc57='']/a[@_ngcontent-sc60='']"): # 
         href = a.attrib['href']
-        #print(a, href)
+        # print(a, href)
         l.append(href)
     return l
 
@@ -124,7 +141,8 @@ def fetch_theses(max_pages, dump_raw):
         print(f'Scraping {s[1]} school will continue until offset={s[2]} or even longer...')
         for i in range(max_pages):
             url_base = 'https://aaltodoc.aalto.fi'
-            url = url_base+'/handle/123456789/'+str(s[0])+'/recent-submissions'
+            # url = url_base+'/handle/123456789/'+str(s[0])+'/recent-submissions'
+            url = url_base+'/handle/123456789/'+str(s[0])
             if i>0:
                 url += '?offset='+str(10*i)
             print('  fetching', url, flush=True)
@@ -132,6 +150,7 @@ def fetch_theses(max_pages, dump_raw):
             if response.status_code!=200:
                 print(i, url, 'error', response.status_code)
             else:
+                # open('index-page.html', 'w').write(response.text)
                 ll = html_to_links(response.text)
                 do_break = True;
                 if len(ll):
@@ -166,6 +185,7 @@ def fetch_theses(max_pages, dump_raw):
                                         print(f'    stored in cache {cfile} <- {urlx}')
                             
                         if text:
+                            # open('item-page.html', 'w').write(text)
                             d = html_to_dict(text)
                             if d:
                                 #print(i, url, l, d)
@@ -401,7 +421,8 @@ if __name__=="__main__":
     args = parser.parse_args()
 
     if use_cache and not os.path.isdir('cache'):
-        if not os.mkdir('cache'):
+        os.mkdir('cache')
+        if not os.path.isdir('cache'):
             print('Failed to create cache directory.')
             use_cache = False
     
