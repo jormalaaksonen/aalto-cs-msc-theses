@@ -4,12 +4,13 @@ import requests
 import json
 import argparse
 import os
+import time
 from lxml import html  as lxml_html
 from lxml import etree as lxml_etree
 
 years = [ '2021', '2022', '2023', '2024' ]
 
-school_info = [ (21, 'SCI', 1180), (22, 'ELEC', 590), (18, 'ENG', 860), (23, 'ARTS', 990) ]
+school_info = [ (21, 'SCI', 59), (22, 'ELEC', 30), (18, 'ENG', 43), (23, 'ARTS', 50) ]
 
 long_names = { 'aat'   : 'Acoustics and Audio Technology',
                'cs'    : 'Computer Science',
@@ -36,7 +37,7 @@ long_names = { 'aat'   : 'Acoustics and Audio Technology',
                'unk'   : 'unknown major'
               }
 
-use_cache = False
+use_cache = True
 
 majors = {}
 
@@ -46,54 +47,75 @@ alias  = {
 theses = {}
 
 def hack_html(html):
-    p = html.find('\n')
+    p = html.find('<html ')
     if p>0:
-        html = '<?xml version="1.0"?>'+html[p:]
+        html = '<?xml version="1.0"?>\n'+html[p:]
     return html
 
-def html_to_dict(html):
-    restree = lxml_html.fromstring(hack_html(html))
+def html_to_dict(html, debug = False):
+    html2   = hack_html(html)
+    #print(html2)
+    restree = lxml_html.fromstring(html2)
     tree    = lxml_etree.ElementTree(restree)
     rec = {}
     ff = ['citation_author', 'citation_title', 'citation_publication_date']
     for f in ff:
         for meta in restree.xpath(f"//meta[@name='{f}']"):
             v = meta.attrib['content']
-            # print(f, v)
+            if debug:
+                print(f, v)
             if f=='citation_title':
                 rec['title'] = ' '.join(v.split())
             if f=='citation_author':
-                rec['creator'] = v
+                rec['author'] = v
             if f=='citation_publication_date':
                 rec['issued'] = v
+
+    if 'issued' not in rec:
+        rec['issued'] = 'unknown'        
 
     for div in restree.xpath("//div[@_ngcontent-sc160='' and @class='simple-view-element']"):
         # print(div)
         l1 = div.xpath('h5')
         l2 = div.xpath('div/span')
-        if len(l1)==1 and len(l2)==1:
-            # print(l1[0].text, l2[0].text)
+        if debug and len(l1):
+            print(l1[0].text, len(l2))
+        if len(l1)==1 and len(l2)>0:
+            if debug:
+                print(l1[0].text, l2[0].text)
             k = l1[0].text
             v = l2[0].text
-            if k=='Major/Subject':
+            w = []
+            for i in l2:
+                if i.text != ', ':
+                    w.append(i.text)
+            if k=='Major/Subject' or k=='Oppiaine':
                 rec['major'] = v
             if k=='Mcode':
                 rec['major_code'] = v
-            if k=='Degree programme':
+            if k=='Degree programme' or k=='Koulutusohjelma':
                 rec['degree_programme'] = v
-            if k=='Language':
+            if k=='Language' or k=='Kieli':
                 rec['language'] = v
-            if k=='Pages':
+            if k=='Pages' or k=='Sivut':
                 rec['pages'] = v
+            if k=='Keywords' or k=='Avainsanat':
+                rec['keywords'] = w
 
     l = restree.xpath("//ds-aalto-item-supervisor")
-    print('Z', len(l))
-    #assert len(l)==1, 'failed with supervisor'
-    #v = l.xpath('div/h5').tail
-    #rec['supervisor'] = v
+    assert len(l)==1, f'failed with supervisor: <{html2}>'
+    v = l[0].xpath('div/h5')[0].tail
+    rec['supervisor'] = v.strip()
                 
-    print(rec)
-    exit(0)
+    l = restree.xpath("//ds-aalto-item-advisor")
+    assert len(l)==1, 'failed with advisor'
+    m = l[0].xpath('div/h5')
+    if len(m)==1:
+        v = m[0].tail
+        rec['advisor'] = v.strip()
+                
+    # print(rec)
+    
     return rec
 
 def html_to_links(html):
@@ -134,29 +156,43 @@ def fetch_faculty():
             l.append(n)
     return l
 
+def request_with_loop(url, n):
+    for i in range(n):
+        response = requests.request('GET', url)
+        if response.status_code!=200:
+            return response
+        if response.text.find('<title>DSpace</title>')<0:
+            return response
+        time.sleep(i)
+    return response
+
 def fetch_theses(max_pages, dump_raw):
     debug = False
     rec = []
     for s in school_info:
-        print(f'Scraping {s[1]} school will continue until offset={s[2]} or even longer...')
+        print(f'Scraping {s[1]} school will continue until cp.page={s[2]} or even longer...')
+        urlred = None
         for i in range(max_pages):
             url_base = 'https://aaltodoc.aalto.fi'
-            # url = url_base+'/handle/123456789/'+str(s[0])+'/recent-submissions'
             url = url_base+'/handle/123456789/'+str(s[0])
             if i>0:
-                url += '?offset='+str(10*i)
+                url = f'{urlred}?cp.page={i+1}'
             print('  fetching', url, flush=True)
             response = requests.request('GET', url)
             if response.status_code!=200:
                 print(i, url, 'error', response.status_code)
             else:
                 # open('index-page.html', 'w').write(response.text)
+                if urlred is None:
+                    urlred = response.url
                 ll = html_to_links(response.text)
                 do_break = True;
                 if len(ll):
                     rawi = 0
-                    #print(i, url, ll)
-                    for l in ll:
+                    # print(i, url, ll)
+                    for li, l in enumerate(ll):
+                        print(f'{li}/{len(ll)}\r', end='', flush=True)
+                        # print(i, url, l, flush=True)
                         urlx  = url_base+l
                         cfile = 'cache/'+l.split('/')[-1]
                         text  = None
@@ -166,7 +202,7 @@ def fetch_theses(max_pages, dump_raw):
                             if debug:
                                 print(f'    read cached     {cfile} -> {urlx}')
                         else:
-                            response = requests.request('GET', urlx)
+                            response = request_with_loop(urlx, 10)
                             if response.status_code!=200:
                                 print(i, url, l, 'error', response.status_code)
                             elif response.text=='':
@@ -188,9 +224,9 @@ def fetch_theses(max_pages, dump_raw):
                             # open('item-page.html', 'w').write(text)
                             d = html_to_dict(text)
                             if d:
-                                #print(i, url, l, d)
+                                # print(i, url, l, d['author'], flush=True)
                                 y = d['issued'][:4]
-                                if y in years:
+                                if y in years or y=='unkn':
                                     d['school'] = s[1]
                                     do_break = False
                                     rec.append(d)
@@ -223,7 +259,7 @@ def name_or_alias(n):
     
 def match_record(r):
     f = set()
-    for p in r['contributor']:
+    for p in [ r['supervisor'] ]:
         n = swap_name(p)
         a = name_or_alias(n)
         if a is not None:
@@ -234,7 +270,7 @@ def match_record(r):
             if a is not None:
                 f.add(a)
     for n in f:
-        e = (swap_name(r['creator']), r['title'], r['issued'], r['school'])
+        e = (swap_name(r['author']), r['title'], r['issued'], r['school'])
         theses[n].append(e)
         #print('FOUND', n, ':', *e)
 
@@ -418,7 +454,15 @@ if __name__=="__main__":
                         help='either dumps or loads theses structure to/from json')
     parser.add_argument('--raw', action='store_true',
                         help='store raw HTML files for error hunting')
+    parser.add_argument('--parse', type=str,
+                        help='read in and parse given file and quit')
     args = parser.parse_args()
+
+    if args.parse:
+        s = open(args.parse).read()
+        d = html_to_dict(s, True)
+        print(d)
+        exit(0)
 
     if use_cache and not os.path.isdir('cache'):
         os.mkdir('cache')
@@ -441,7 +485,7 @@ if __name__=="__main__":
         # print(f'aliases: {alias}')
 
     if args.rec is None or args.rec=='dump':
-        rec = fetch_theses(200, args.raw)
+        rec = fetch_theses(100, args.raw)
     if args.rec=='dump':
         open('rec.json', 'w').write(json.dumps(rec))
         print('Dumped to rec.json')
