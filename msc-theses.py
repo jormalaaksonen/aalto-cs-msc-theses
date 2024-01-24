@@ -10,7 +10,7 @@ from lxml import etree as lxml_etree
 
 years = [ '2021', '2022', '2023', '2024' ]
 
-school_info = [ ('SCI', 21, 65), ('ELEC', 22, 30), ('ENG', 18, 43), ('ARTS', 23, 50) ]
+school_info = [ ('SCI', 21, 65), ('ELEC', 22, 35), ('ENG', 18, 49), ('ARTS', 23, 53) ]
 
 long_names = { 'aat'   : 'Acoustics and Audio Technology',
                'cs'    : 'Computer Science',
@@ -104,7 +104,11 @@ def html_to_dict(html, debug = False):
 
     l = restree.xpath("//ds-aalto-item-supervisor")
     assert len(l)==1, f'failed with supervisor: <{html2}>'
-    v = l[0].xpath('div/h5')[0].tail
+    m = l[0].xpath('div/h5')
+    if len(m)>0:
+        v = m[0].tail
+    else:
+        v = "unknown"
     rec['supervisor'] = v.strip()
                 
     l = restree.xpath("//ds-aalto-item-advisor")
@@ -173,11 +177,22 @@ def fetch_one_thesis(s, l, li, ln, url_base, dump_raw, debug):
     urlx  = url_base+l
     cfile = 'cache/'+l.split('/')[-1]
     text  = None
+    d = None
+    jfilex = None
     #print(l, urlx, cfile)
     if use_cache and os.path.isfile(cfile) and os.path.getsize(cfile):
-        text = open(cfile).read()
-        if debug:
-            print(f'    read cached     {cfile} -> {urlx}')
+        jfile = cfile+'.json'
+        if os.path.isfile(jfile) and os.path.getsize(jfile):
+            d = json.loads(open(jfile).read())
+            if debug:
+                print(f'    read JSON       {jfile} -> {urlx}')
+        else:
+           jfilex = jfile 
+
+        if not d:
+            text  = open(cfile).read()
+            if debug:
+                print(f'    read cached     {cfile} -> {urlx}')
     else:
         response = request_with_loop(urlx, 10)
         if response.status_code!=200:
@@ -204,13 +219,19 @@ def fetch_one_thesis(s, l, li, ln, url_base, dump_raw, debug):
             print(i, url, l, 'failed')
             return ({}, True)
 
-        # print(i, url, l, d['author'], flush=True)
-        y = d['issued'][:4]
-        if y in years or y=='unkn':
-            d['school'] = s[0]
-            return (d, False)
-        else:
-            return ({}, True)
+    # print(i, url, l, d['author'], flush=True)
+    d['url']    = urlx
+    d['school'] = s[0]
+    if jfilex:
+        open(jfilex, 'w').write(json.dumps(d, indent=4))
+        if debug:
+            print(f'    stored in JSON  {jfilex}')
+
+    y = d['issued'][:4]
+    if y in years or y=='unkn':
+        return (d, False)
+    else:
+        return ({}, True)
                                 
 def fetch_theses(max_pages, dump_raw, debug):
     rec = []
@@ -453,15 +474,15 @@ if __name__=="__main__":
                         help='select years (comma-separated)')
     parser.add_argument('-d', '--detail', action='store_true',
                         help='show also authors, titles and issue dates')
-    parser.add_argument('-r', '--rec', type=str, choices=['dump', 'load'],
-                        help='either dumps or loads rec structure to/from json')
+    parser.add_argument('-t', '--theses', type=str, choices=['dump', 'load'],
+                        help='either dumps or loads all theses structure to/from theses.json')
     parser.add_argument('-a', type=str, choices=['dump', 'load'],
                         help='either dumps or loads alias structure to/from json')
     parser.add_argument('-p', '--person', type=str, 
                         help='add names or aliases, format "GivenName SurName" or "Alias:Canonical",'+
                              ' multiple comma separated, see also alias.example.txt')
-    parser.add_argument('-t', '--theses', type=str, choices=['dump', 'load'],
-                        help='either dumps or loads theses structure to/from json')
+    parser.add_argument('-s', '--supervisors', type=str, choices=['dump', 'load'],
+                        help='either dumps or loads theses per supervisor structure to/from supervisors.json')
     parser.add_argument('--raw', action='store_true',
                         help='store raw HTML files for error hunting')
     parser.add_argument('--debug', action='store_true',
@@ -510,16 +531,16 @@ if __name__=="__main__":
         alias[ali] = can
     # print(f'aliases: {alias}')
 
-    if args.rec is None or args.rec=='dump':
+    if args.theses is None or args.theses=='dump':
         rec = fetch_theses(args.max, args.raw, args.debug)
 
-    if args.rec=='dump':
-        open('rec.json', 'w').write(json.dumps(rec))
-        print('Dumped to rec.json')
+    if args.theses=='dump':
+        open('theses.json', 'w').write(json.dumps(rec))
+        print('Dumped to theses.json')
 
-    if args.rec=='load':
-        rec = json.loads(open('rec.json').read())
-        print('Loaded from rec.json')
+    if args.theses=='load':
+        rec = json.loads(open('theses.json').read())
+        print('Loaded from theses.json')
     #print(rec)
 
     people = fetch_faculty()
@@ -529,21 +550,23 @@ if __name__=="__main__":
         theses[p] = []
         alias[p]  = p
 
-    if args.theses!='load':
+    if args.supervisors!='load':
         print('Matching {} records with {} faculty members'.format(len(rec), len(people)))
         for r in rec:
             match_record(r)
 
-    if args.theses=='dump':
-        open('theses.json', 'w').write(json.dumps(theses))
-        print('Dumped to theses.json')
-    if args.theses=='load':
-        theses = json.loads(open('theses.json').read())
-        print('Loaded from theses.json')
+    if args.supervisors=='dump':
+        open('supervisors.json', 'w').write(json.dumps(theses))
+        print('Dumped to supervisors.json')
+
+    if args.supervisors=='load':
+        theses = json.loads(open('supervisors.json').read())
+        print('Loaded from supervisors.json')
 
     if args.a=='dump':
         open('alias.json', 'w').write(json.dumps(alias))
         print('Dumped to alias.json')
+
     if args.a=='load':
         for i, j in json.loads(open('alias.json').read()).items():
             alias[i] = j
