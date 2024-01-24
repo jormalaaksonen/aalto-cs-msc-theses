@@ -23,6 +23,11 @@ thesis insormation and reuse the dump in further invocations:
 ```
 ./msc-theses.py --theses=load --detail
 ```
+Additional switches and help:
+
+```
+./msc-theses.py --help
+```
 
 ## Feedback
 
