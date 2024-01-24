@@ -1,0 +1,5 @@
+# if needed, rename this file to alias.txt and add entries like
+# 1) names of people missing from the faculty page:
+# John Doe
+# 2) aliases from former form to current form on the faculty page:
+# Mary NeeName : Mary FacultyName

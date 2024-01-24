@@ -166,8 +166,53 @@ def request_with_loop(url, n):
         time.sleep(i)
     return response
 
-def fetch_theses(max_pages, dump_raw):
-    debug = False
+def fetch_one_thesis(s, l, li, ln, url_base, dump_raw, debug):
+    rawi = 0
+    print(f'{li}/{ln}\r', end='', flush=True)
+    # print(i, url, l, flush=True)
+    urlx  = url_base+l
+    cfile = 'cache/'+l.split('/')[-1]
+    text  = None
+    #print(l, urlx, cfile)
+    if use_cache and os.path.isfile(cfile) and os.path.getsize(cfile):
+        text = open(cfile).read()
+        if debug:
+            print(f'    read cached     {cfile} -> {urlx}')
+    else:
+        response = request_with_loop(urlx, 10)
+        if response.status_code!=200:
+            print(i, url, l, 'error', response.status_code)
+        elif response.text=='':
+            print(i, url, l, 'empty doc', response.status_code)
+        else:
+            if dump_raw:
+                ofilen = url.replace('/', '_').replace('?', '_')+'_'+str(rawi)+'.html'
+                ofile = open(ofilen, 'w')
+                print(response.text, file=ofile)
+                print(f'   ... dumped raw HTML in {ofilen}')
+                rawi += 1
+            text = response.text
+            if use_cache:
+                open(cfile, 'wb').write(text.encode())
+                if debug:
+                    print(f'    stored in cache {cfile} <- {urlx}')
+
+    if text:
+        # open('item-page.html', 'w').write(text)
+        d = html_to_dict(text)
+        if not d:
+            print(i, url, l, 'failed')
+            return ({}, True)
+
+        # print(i, url, l, d['author'], flush=True)
+        y = d['issued'][:4]
+        if y in years or y=='unkn':
+            d['school'] = s[1]
+            return (d, False)
+        else:
+            return ({}, True)
+                                
+def fetch_theses(max_pages, dump_raw, debug):
     rec = []
     for s in school_info:
         print(f'Scraping {s[1]} school will continue until cp.page={s[2]} or even longer...')
@@ -178,64 +223,27 @@ def fetch_theses(max_pages, dump_raw):
             if i>0:
                 url = f'{urlred}?cp.page={i+1}'
             print('  fetching', url, flush=True)
-            response = requests.request('GET', url)
+            response = request_with_loop(url, 10)
             if response.status_code!=200:
                 print(i, url, 'error', response.status_code)
-            else:
-                # open('index-page.html', 'w').write(response.text)
-                if urlred is None:
-                    urlred = response.url
-                ll = html_to_links(response.text)
-                do_break = True;
-                if len(ll):
-                    rawi = 0
-                    # print(i, url, ll)
-                    for li, l in enumerate(ll):
-                        print(f'{li}/{len(ll)}\r', end='', flush=True)
-                        # print(i, url, l, flush=True)
-                        urlx  = url_base+l
-                        cfile = 'cache/'+l.split('/')[-1]
-                        text  = None
-                        #print(l, urlx, cfile)
-                        if use_cache and os.path.isfile(cfile) and os.path.getsize(cfile):
-                            text = open(cfile).read()
-                            if debug:
-                                print(f'    read cached     {cfile} -> {urlx}')
-                        else:
-                            response = request_with_loop(urlx, 10)
-                            if response.status_code!=200:
-                                print(i, url, l, 'error', response.status_code)
-                            elif response.text=='':
-                                print(i, url, l, 'empty doc', response.status_code)
-                            else:
-                                if dump_raw:
-                                    ofilen = url.replace('/', '_').replace('?', '_')+'_'+str(rawi)+'.html'
-                                    ofile = open(ofilen, 'w')
-                                    print(response.text, file=ofile)
-                                    print(f'   ... dumped raw HTML in {ofilen}')
-                                    rawi += 1
-                                text = response.text
-                                if use_cache:
-                                    open(cfile, 'wb').write(text.encode())
-                                    if debug:
-                                        print(f'    stored in cache {cfile} <- {urlx}')
-                            
-                        if text:
-                            # open('item-page.html', 'w').write(text)
-                            d = html_to_dict(text)
-                            if d:
-                                # print(i, url, l, d['author'], flush=True)
-                                y = d['issued'][:4]
-                                if y in years or y=='unkn':
-                                    d['school'] = s[1]
-                                    do_break = False
-                                    rec.append(d)
-                            else:
-                                print(i, url, l, 'failed')
-                else:
-                    print(i, url, 'failed')
-                if do_break:
-                    break
+                continue
+
+            # open('index-page.html', 'w').write(response.text)
+            if urlred is None:
+                urlred = response.url
+            ll = html_to_links(response.text)
+            if len(ll)==0:
+                print(i, url, 'failed')                
+
+            do_break = True
+            for li, l in enumerate(ll):
+                d, b = fetch_one_thesis(s, l, li, len(ll), url_base, dump_raw, debug)
+                do_break = do_break and b
+                if d:
+                    rec.append(d)
+                    
+            if do_break:
+                break
     return rec
 
 no_hit = set()
@@ -439,21 +447,27 @@ def show_summary():
 
 if __name__=="__main__":
     parser = argparse.ArgumentParser(description='Aalto CS Dept M.Sc. Thesis listing '
-                                     +'per supervisor in 2021-23')
+                                     +'per supervisor in 2021-24',
+                                     epilog='See also alias.example.txt')
     parser.add_argument('-y', '--years', type=str,
                         help='select years (comma-separated)')
     parser.add_argument('-d', '--detail', action='store_true',
                         help='show also authors, titles and issue dates')
     parser.add_argument('-r', '--rec', type=str, choices=['dump', 'load'],
                         help='either dumps or loads rec structure to/from json')
-    parser.add_argument('-a', '--alias', type=str, choices=['dump', 'load'],
+    parser.add_argument('-a', type=str, choices=['dump', 'load'],
                         help='either dumps or loads alias structure to/from json')
     parser.add_argument('-p', '--person', type=str, 
-                        help='add names or aliases, format "FName SName" or "Alias:Canonical", multiple comma separated')
+                        help='add names or aliases, format "GivenName SurName" or "Alias:Canonical",'+
+                             ' multiple comma separated, see also alias.example.txt')
     parser.add_argument('-t', '--theses', type=str, choices=['dump', 'load'],
                         help='either dumps or loads theses structure to/from json')
     parser.add_argument('--raw', action='store_true',
                         help='store raw HTML files for error hunting')
+    parser.add_argument('--debug', action='store_true',
+                        help='be more verbose')
+    parser.add_argument('--max', type=int, default=100,
+                        help='set maximum number of pages to be read per school, default=%(default)s')
     parser.add_argument('--parse', type=str,
                         help='read in and parse given file and quit')
     args = parser.parse_args()
@@ -472,23 +486,37 @@ if __name__=="__main__":
     
     if args.years:
         years = args.years.split(',')
-    
+
+    alines = []
+    if os.path.isfile('alias.txt'):
+        with open('alias.txt') as f:
+            for l in f:
+                p = l.find('#')
+                if p>=0:
+                    l = l[:p]
+                if len(l):
+                    alines.append(l)
+                
     if args.person:
-        l = args.person.split(',')
-        for i in l:
-            x = i.split(':')
-            assert len(x)<3
-            ali = x[0].strip()
-            can = (x[1] if len(x)>1 and len(x[1])>1 else x[0]).strip()
-            #print(f'[{ali}]->[{can}]')
-            alias[ali] = can
-        # print(f'aliases: {alias}')
+        alines.extend(args.person.split(','))
+
+    for i in alines:
+        x = i.split(':')
+        assert len(x)<3
+        ali = x[0].strip()
+        can = (x[1] if len(x)>1 and len(x[1])>1 else x[0]).strip()
+        if args.debug:
+            print(f'Adding alias [{ali}]->[{can}]')
+        alias[ali] = can
+    # print(f'aliases: {alias}')
 
     if args.rec is None or args.rec=='dump':
-        rec = fetch_theses(100, args.raw)
+        rec = fetch_theses(args.max, args.raw, args.debug)
+
     if args.rec=='dump':
         open('rec.json', 'w').write(json.dumps(rec))
         print('Dumped to rec.json')
+
     if args.rec=='load':
         rec = json.loads(open('rec.json').read())
         print('Loaded from rec.json')
@@ -513,10 +541,10 @@ if __name__=="__main__":
         theses = json.loads(open('theses.json').read())
         print('Loaded from theses.json')
 
-    if args.alias=='dump':
+    if args.a=='dump':
         open('alias.json', 'w').write(json.dumps(alias))
         print('Dumped to alias.json')
-    if args.alias=='load':
+    if args.a=='load':
         for i, j in json.loads(open('alias.json').read()).items():
             alias[i] = j
 
@@ -528,5 +556,5 @@ if __name__=="__main__":
 
     split_theses()
 
-    show_summary()
+    #show_summary()
 
