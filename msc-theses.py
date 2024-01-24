@@ -297,7 +297,12 @@ def match_record(r):
             if a is not None:
                 f.add(a)
     for n in f:
-        e = (swap_name(r['author']), r['title'], r['issued'], r['school'])
+        mc = r.get('major_code', 'unknown')
+        p = mc.find(' ')
+        if p>0:
+            mc = mc[:p]
+        assert len(mc)<9, f'too long major_code <{mc}>'
+        e = (swap_name(r['author']), r['title'], r['issued'], r['school'], mc)
         theses[n].append(e)
         #print('FOUND', n, ':', *e)
 
@@ -408,18 +413,24 @@ def show_theses(detail):
     #print(counts)
     sum = 0
     for i in counts:
-        print('{:3d} {} ({})'.format(*i))
+        print(f'{i[0]:3d} {i[1]} ({i[2]})')
         sum += i[0]
         if detail:
             for j in theses[i[1]]:
                 s = '' if j[3]=='SCI' else j[3][:3]
-                print('    {:3s} {}: {}. {}'.format(s, *j))
-    print('{:3d} {}'.format(sum, 'TOTAL'))
+                print(f'    {s:3s} {j[4]:8} {j[0]}: {j[1]}. {j[2]}')
+    print(f'{sum:3d} TOTAL')
 
 split = {}
+per_major_code = {}
 
 def split_theses():
     for i, j in theses.items():
+        # print(i, j)
+        # if j[4] not in per_major_code:
+        #     per_major_code[j[4]] = []
+        # per_major_code[j[4]].append(j)
+
         if i not in majors:
             add_to_majors(i, 'unk')
         n = len(j)
@@ -441,6 +452,7 @@ def split_theses():
                 split[m]['theses'].append((i, n/e, 1/e))
 
 def show_summary():
+    #print(per_major_code)
     #print(split)
     for m in split:
         s = 0
@@ -470,12 +482,12 @@ if __name__=="__main__":
                         help='select years (comma-separated)')
     parser.add_argument('-d', '--detail', action='store_true',
                         help='show also authors, titles and issue dates')
-    parser.add_argument('-t', '--theses', type=str, choices=['dump', 'load'],
-                        help='either dumps or load all theses to/from theses.json')
+    parser.add_argument('-t', '--theses', type=str, choices=['dump', 'load', 'skip'],
+                        help='either dump or load all theses to/from theses.json')
     parser.add_argument('-s', '--supervisors', type=str, choices=['dump', 'load'],
-                        help='either dump or load theses per supervisor structure to/from supervisors.json')
+                        help='either dump or load theses per supervisor to/from supervisors.json')
     parser.add_argument('-a', '--aliasdata', type=str, choices=['dump', 'load'],
-                        help='either dumps or load automagically created aliases to/from aliases.json')
+                        help='either dump or load automagically created aliases to/from aliases.json')
     parser.add_argument('-p', '--person', type=str, 
                         help='add person names or aliases, format "GivenName SurName" or "Alias:Canonical",'+
                              ' multiple comma separated, see also alias.example.txt')
@@ -525,6 +537,11 @@ if __name__=="__main__":
         if args.debug:
             print(f'Adding alias [{ali}]->[{can}]')
         alias[ali] = can
+
+    if args.aliasdata=='load':
+        for i, j in json.loads(open('aliases.json').read()).items():
+            alias[i] = j
+
     # print(f'aliases: {alias}')
 
     if args.theses is None or args.theses=='dump':
@@ -567,10 +584,6 @@ if __name__=="__main__":
     if args.aliasdata=='dump':
         open('aliases.json', 'w').write(json.dumps(alias))
         print('Dumped to alias.json')
-
-    if args.aliasdata=='load':
-        for i, j in json.loads(open('aliases.json').read()).items():
-            alias[i] = j
 
     #find_majors()
 
