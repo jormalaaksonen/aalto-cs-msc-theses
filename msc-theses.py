@@ -465,8 +465,6 @@ def show_summary():
     
 # -----------------------------------------------------------------------------
 
-# print(html_to_dict(open('zzz.html').read()))
-
 if __name__=="__main__":
     parser = argparse.ArgumentParser(description='Aalto CS Dept M.Sc. Thesis listing '
                                      +'per supervisor in 2021-24',
@@ -540,8 +538,13 @@ if __name__=="__main__":
         print('Dumped to theses.json')
 
     if args.theses=='load':
-        rec = json.loads(open('theses.json').read())
+        rec_all = json.loads(open('theses.json').read())
         print('Loaded from theses.json')
+        rec = []
+        for i in rec_all:
+            if i['issued'][:4] in years:
+                rec.append(i)
+
     #print(rec)
 
     people = fetch_faculty()
