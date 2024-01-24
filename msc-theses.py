@@ -10,7 +10,7 @@ from lxml import etree as lxml_etree
 
 years = [ '2021', '2022', '2023', '2024' ]
 
-school_info = [ ('SCI', 21, 65), ('ELEC', 22, 35), ('ENG', 18, 49), ('ARTS', 23, 53) ]
+school_info = [ ('SCI', 21, 65), ('ELEC', 22, 35), ('ENG', 18, 49), ('ARTS', 23, 57) ]
 
 long_names = { 'aat'   : 'Acoustics and Audio Technology',
                'cs'    : 'Computer Science',
@@ -40,10 +40,7 @@ long_names = { 'aat'   : 'Acoustics and Audio Technology',
 use_cache = True
 
 majors = {}
-
-alias  = {
-}
-
+alias  = {}
 theses = {}
 
 def hack_html(html):
@@ -474,14 +471,14 @@ if __name__=="__main__":
     parser.add_argument('-d', '--detail', action='store_true',
                         help='show also authors, titles and issue dates')
     parser.add_argument('-t', '--theses', type=str, choices=['dump', 'load'],
-                        help='either dumps or loads all theses structure to/from theses.json')
-    parser.add_argument('-a', type=str, choices=['dump', 'load'],
-                        help='either dumps or loads alias structure to/from json')
-    parser.add_argument('-p', '--person', type=str, 
-                        help='add names or aliases, format "GivenName SurName" or "Alias:Canonical",'+
-                             ' multiple comma separated, see also alias.example.txt')
+                        help='either dumps or load all theses to/from theses.json')
     parser.add_argument('-s', '--supervisors', type=str, choices=['dump', 'load'],
-                        help='either dumps or loads theses per supervisor structure to/from supervisors.json')
+                        help='either dump or load theses per supervisor structure to/from supervisors.json')
+    parser.add_argument('-a', '--aliasdata', type=str, choices=['dump', 'load'],
+                        help='either dumps or load automagically created aliases to/from aliases.json')
+    parser.add_argument('-p', '--person', type=str, 
+                        help='add person names or aliases, format "GivenName SurName" or "Alias:Canonical",'+
+                             ' multiple comma separated, see also alias.example.txt')
     parser.add_argument('--raw', action='store_true',
                         help='store raw HTML files for error hunting')
     parser.add_argument('--debug', action='store_true',
@@ -567,12 +564,12 @@ if __name__=="__main__":
         theses = json.loads(open('supervisors.json').read())
         print('Loaded from supervisors.json')
 
-    if args.a=='dump':
-        open('alias.json', 'w').write(json.dumps(alias))
+    if args.aliasdata=='dump':
+        open('aliases.json', 'w').write(json.dumps(alias))
         print('Dumped to alias.json')
 
-    if args.a=='load':
-        for i, j in json.loads(open('alias.json').read()).items():
+    if args.aliasdata=='load':
+        for i, j in json.loads(open('aliases.json').read()).items():
             alias[i] = j
 
     #find_majors()
