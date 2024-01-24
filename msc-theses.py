@@ -10,7 +10,7 @@ from lxml import etree as lxml_etree
 
 years = [ '2021', '2022', '2023', '2024' ]
 
-school_info = [ (21, 'SCI', 59), (22, 'ELEC', 30), (18, 'ENG', 43), (23, 'ARTS', 50) ]
+school_info = [ ('SCI', 21, 65), ('ELEC', 22, 30), ('ENG', 18, 43), ('ARTS', 23, 50) ]
 
 long_names = { 'aat'   : 'Acoustics and Audio Technology',
                'cs'    : 'Computer Science',
@@ -181,9 +181,9 @@ def fetch_one_thesis(s, l, li, ln, url_base, dump_raw, debug):
     else:
         response = request_with_loop(urlx, 10)
         if response.status_code!=200:
-            print(i, url, l, 'error', response.status_code)
+            print(i, urlx, l, 'error', response.status_code)
         elif response.text=='':
-            print(i, url, l, 'empty doc', response.status_code)
+            print(i, urlx, l, 'empty doc', response.status_code)
         else:
             if dump_raw:
                 ofilen = url.replace('/', '_').replace('?', '_')+'_'+str(rawi)+'.html'
@@ -207,7 +207,7 @@ def fetch_one_thesis(s, l, li, ln, url_base, dump_raw, debug):
         # print(i, url, l, d['author'], flush=True)
         y = d['issued'][:4]
         if y in years or y=='unkn':
-            d['school'] = s[1]
+            d['school'] = s[0]
             return (d, False)
         else:
             return ({}, True)
@@ -215,14 +215,14 @@ def fetch_one_thesis(s, l, li, ln, url_base, dump_raw, debug):
 def fetch_theses(max_pages, dump_raw, debug):
     rec = []
     for s in school_info:
-        print(f'Scraping {s[1]} school will continue until cp.page={s[2]} or even longer...')
+        print(f'Scraping {s[0]} school will continue until cp.page={s[2]} or even longer...')
         urlred = None
         for i in range(max_pages):
             url_base = 'https://aaltodoc.aalto.fi'
-            url = url_base+'/handle/123456789/'+str(s[0])
+            url = f'{url_base}/handle/123456789/{s[1]}'
             if i>0:
                 url = f'{urlred}?cp.page={i+1}'
-            print('  fetching', url, flush=True)
+            print(f'  fetching {s[0]} {url}', flush=True)
             response = request_with_loop(url, 10)
             if response.status_code!=200:
                 print(i, url, 'error', response.status_code)
