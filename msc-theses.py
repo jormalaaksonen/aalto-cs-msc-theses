@@ -37,6 +37,30 @@ long_names = { 'aat'   : 'Acoustics and Audio Technology',
                'unk'   : 'unknown major'
               }
 
+major_names = { 'SCI3042':  'Computer science',
+                'SCI3044':  'Macadamia',
+                'SCI3113':  'SECCLO',
+                'SCI3043':  'SSE',
+                'SCI3084':  'Security',
+                'SCI3115':  'EIT ICT Data science',
+                'SCI3095':  'EIT ICT Data science',
+                'SCI3020':  'EIT ICT HCID',
+                'SCI3102':  'EIT ICT Visual computing',
+                'SCI3047':  'Information networks',
+                'SCI3092':  'Bioinformatics and digital health',
+                'SCI3060':  'Complex systems',
+                'SCI3097':  'HCI',
+                'SCI3046':  'Game',
+                'SCI3070':  'Macadamia (minor)',
+                'SCI3059':  'Biomedical engineering',
+                'ELEC3029': 'Communications engineering',
+                'ELEC3049': 'SPDS',
+                'ELEC3025': 'Control, robotics and autonomous systems',
+                'ELEC3060': 'Electronic and digital systems',
+                'ELEC3030': 'Acoustics and audio technology',
+                'ELEC3055': 'Autonomous systems'
+               }
+
 use_cache = True
 
 majors = {}
@@ -305,6 +329,9 @@ def match_record(r):
         e = (swap_name(r['author']), r['title'], r['issued'], r['school'], mc)
         theses[n].append(e)
         #print('FOUND', n, ':', *e)
+        if mc not in per_major_code:
+            per_major_code[mc] = []
+        per_major_code[mc].append(e)
 
 def find_names(t):
     f = set()
@@ -427,10 +454,6 @@ per_major_code = {}
 def split_theses():
     for i, j in theses.items():
         # print(i, j)
-        # if j[4] not in per_major_code:
-        #     per_major_code[j[4]] = []
-        # per_major_code[j[4]].append(j)
-
         if i not in majors:
             add_to_majors(i, 'unk')
         n = len(j)
@@ -452,7 +475,18 @@ def split_theses():
                 split[m]['theses'].append((i, n/e, 1/e))
 
 def show_summary():
-    #print(per_major_code)
+    # print(per_major_code)
+    mcc = []
+    for i, j in per_major_code.items():
+        mcc.append((len(j), i))
+    mcc.sort(reverse=True)
+    sum = 0
+    for i in mcc:
+        print(f'{i[0]:4} {i[1]:8} {major_names.get(i[1], "")}')
+        sum += i[0]
+    print(f'{sum:4} TOTAL')
+    return
+
     #print(split)
     for m in split:
         s = 0
@@ -544,7 +578,7 @@ if __name__=="__main__":
 
     # print(f'aliases: {alias}')
 
-    if args.theses is None or args.theses=='dump':
+    if (args.theses is None and args.supervisors!='load') or args.theses=='dump':
         rec = fetch_theses(args.max, args.raw, args.debug)
 
     if args.theses=='dump':
@@ -593,5 +627,5 @@ if __name__=="__main__":
 
     split_theses()
 
-    #show_summary()
+    show_summary()
 
