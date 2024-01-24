@@ -15,7 +15,7 @@ To see additionally the schools, authors, titles and issue dates of the theses:
 ```
 
 Because the data collection stage is rather slow, it is advisable to dump the
-thesis insormation and reuse the dump in further invocations:
+thesis information and reuse the dump in further invocations:
 
 ```
 ./msc-theses.py --theses=dump
