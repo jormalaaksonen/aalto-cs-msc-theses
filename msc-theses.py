@@ -176,12 +176,12 @@ def fetch_one_thesis(s, l, li, ln, url_base, dump_raw, debug):
     # print(i, url, l, flush=True)
     urlx  = url_base+l
     cfile = 'cache/'+l.split('/')[-1]
+    jfile = cfile+'.json'
     text  = None
     d = None
     jfilex = None
     #print(l, urlx, cfile)
     if use_cache and os.path.isfile(cfile) and os.path.getsize(cfile):
-        jfile = cfile+'.json'
         if os.path.isfile(jfile) and os.path.getsize(jfile):
             d = json.loads(open(jfile).read())
             if debug:
@@ -208,6 +208,7 @@ def fetch_one_thesis(s, l, li, ln, url_base, dump_raw, debug):
                 rawi += 1
             text = response.text
             if use_cache:
+                jfilex = jfile
                 open(cfile, 'wb').write(text.encode())
                 if debug:
                     print(f'    stored in cache {cfile} <- {urlx}')
