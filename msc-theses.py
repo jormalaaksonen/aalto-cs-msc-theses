@@ -10,7 +10,7 @@ from lxml import etree as lxml_etree
 
 years = [ '2021', '2022', '2023', '2024' ]
 
-school_info = [ ('SCI', 21, 65), ('ELEC', 22, 35), ('ENG', 18, 49), ('ARTS', 23, 57) ]
+school_info = [ ('SCI', 21, 71), ('ELEC', 22, 38), ('ENG', 18, 53), ('ARTS', 23, 61) ]
 
 long_names = { 'aat'   : 'Acoustics and Audio Technology',
                'cs'    : 'Computer Science',
