@@ -11,7 +11,14 @@ from lxml import etree as lxml_etree
 
 years = [ '2021', '2022', '2023', '2024' ]
 
-school_info = [ ('SCI', 21, 71), ('ELEC', 22, 38), ('ENG', 18, 53), ('ARTS', 23, 61) ]
+school_info_bsc = [ ('SCI',  'BSc', '045c30ab-bee2-4e5a-9fa1-89a9e18e087b', 52) ]
+
+school_info_msc = [ ('SCI',  'MSc', 'af72e803-f468-4c81-802c-7b8ff8602294', 71),
+                    ('ELEC', 'MSc', '9785ec69-7098-4c4a-88d8-32422966cd06', 38),
+                    ('ENG',  'MSc', 'fa8d40ed-d19a-4768-bd06-60b5d533195c', 53),
+                    ('ARTS', 'MSc', '81ea0a41-6f6f-4cad-98a6-6e09bd6b8068', 61) ]
+
+school_info = []
 
 long_names = { 'aat'   : 'Acoustics and Audio Technology',
                'cs'    : 'Computer Science',
@@ -38,7 +45,14 @@ long_names = { 'aat'   : 'Acoustics and Audio Technology',
                'unk'   : 'unknown major'
               }
 
-major_names = { 'SCI3042':  'Computer science',
+major_names = { # BSc
+                'SCI3027': 'Tietotekniikka',
+                'SCI3026': 'Informaatioverkostot',
+                'SCI3029': 'Matematiikka',
+                'SCI3103': 'Quantum technology',
+
+                # MSc
+                'SCI3042':  'Computer science',
                 'SCI3043':  'SSE',
                 'SCI3044':  'Macadamia',
                 'SCI3046':  'Game design and development',
@@ -72,6 +86,7 @@ major_names = { 'SCI3042':  'Computer science',
               }
 
 use_cache = True
+cache_dir = None
 
 majors = {}
 alias  = {}
@@ -260,7 +275,7 @@ def fetch_one_thesis(s, l, li, ln, url_base, dump_raw, debug):
     print(f'{li}/{ln}\r', end='', flush=True)
     # print(i, url, l, flush=True)
     urlx  = url_base+l
-    cfile = 'cache/'+l.split('/')[-1]
+    cfile = cache_dir+'/'+l.split('/')[-1]
     jfile = cfile+'.json'
     text  = None
     d = None
@@ -322,11 +337,12 @@ def fetch_one_thesis(s, l, li, ln, url_base, dump_raw, debug):
 def fetch_theses(max_pages, dump_raw, debug):
     rec = []
     for s in school_info:
-        print(f'Scraping {s[0]} school will continue until cp.page={s[2]} or even longer...')
+        print(f'Scraping {s[0]} school{s[1]}  will continue until cp.page={s[3]} or even longer...')
         urlred = None
         for i in range(max_pages):
             url_base = 'https://aaltodoc.aalto.fi'
-            url = f'{url_base}/handle/123456789/{s[1]}'
+            # url = f'{url_base}/handle/123456789/{s[2]}'
+            url = f'{url_base}/collections/{s[2]}'
             if i>0:
                 url = f'{urlred}?cp.page={i+1}'
             print(f'  fetching {s[0]} {url}', flush=True)
@@ -355,14 +371,16 @@ def fetch_theses(max_pages, dump_raw, debug):
 
 def fetch_theses_cache(debug):
     r = []
-    for i in glob.glob('cache/*.json'):
+    for i in glob.glob(cache_dir+'/*.json'):
+        #print(i)
         d = json.loads(open(i).read())
         r.append(d)
     rec = []
     for s in school_info:
         a = []
         for i in r:
-            if i['school']==s[0]:
+            j = i['school'].split(' ')[0]
+            if j==s[0]:
                 a.append(i)
         rec.extend(sorted(a, key=lambda d: d['issued'], reverse=True))
     return rec
@@ -386,11 +404,22 @@ def name_or_alias(n):
     no_hit.add(n)
     return None
     
-def match_record(r):
+def match_record(r, roles):
+    rr = []
+    for i in roles:
+        if r.get(i, '')!='':
+            rr.append(r[i])
+    #print(rr)
     f = set()
-    for p in [ r['supervisor'] ]:
-        if p=='unknown':
+    for pp in rr:
+        if pp=='unknown':
             continue
+        p = pp
+        if p.find(',')<0:
+            px = p.find(' ')
+            if px>0:
+                p = p[:px]+','+p[px:]
+                #print(f'COMMA ADDED [{pp}]=>[{p}]')
         n = swap_name(p)
         a = name_or_alias(n)
         if a is not None:
@@ -597,6 +626,8 @@ if __name__=="__main__":
     parser = argparse.ArgumentParser(description='Aalto CS Dept M.Sc. Thesis listing '
                                      +'per supervisor in 2021-24',
                                      epilog='See also alias.example.txt')
+    parser.add_argument('-b', '--bsc', action='store_true',
+                        help='show BSc theses instead of MSc')
     parser.add_argument('-f', '--fast', action='store_true',
                         help='fast version: no downloads, just read cached JSON files')
     parser.add_argument('-y', '--years', type=str,
@@ -624,6 +655,15 @@ if __name__=="__main__":
                         help='read in and parse given file and quit')
     args = parser.parse_args()
 
+    if args.bsc:
+        school_info = school_info_bsc
+        cache_dir = 'cache/bsc'
+        roles = ['advisor']
+    else:
+        school_info = school_info_msc
+        cache_dir = 'cache/msc'
+        roles = ['supervisor']
+    
     if args.parse:
         s = open(args.parse).read()
         d = html_to_dict(s, True)
@@ -672,7 +712,7 @@ if __name__=="__main__":
             rec = fetch_theses(args.max, args.raw, args.debug)
         else:
             rec = fetch_theses_cache(args.debug)
-
+            
     if args.theses=='dump':
         open('theses.json', 'w').write(json.dumps(rec))
         print('Dumped to theses.json')
@@ -697,7 +737,7 @@ if __name__=="__main__":
     if args.supervisors!='load':
         print('Matching {} records with {} faculty members'.format(len(rec), len(people)))
         for r in rec:
-            match_record(r)
+            match_record(r, roles)
 
     if args.supervisors=='dump':
         open('supervisors.json', 'w').write(json.dumps(theses))
