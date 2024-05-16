@@ -5,6 +5,7 @@ import json
 import argparse
 import os
 import time
+import glob
 from lxml import html  as lxml_html
 from lxml import etree as lxml_etree
 
@@ -38,28 +39,37 @@ long_names = { 'aat'   : 'Acoustics and Audio Technology',
               }
 
 major_names = { 'SCI3042':  'Computer science',
-                'SCI3044':  'Macadamia',
-                'SCI3113':  'SECCLO',
                 'SCI3043':  'SSE',
-                'SCI3084':  'Security',
-                'SCI3115':  'EIT ICT Data science',
-                'SCI3095':  'EIT ICT Data science',
-                'SCI3020':  'EIT ICT HCID',
-                'SCI3102':  'EIT ICT Visual computing',
+                'SCI3044':  'Macadamia',
+                'SCI3046':  'Game design and development',
                 'SCI3047':  'Information networks',
-                'SCI3092':  'Bioinformatics and digital health',
-                'SCI3060':  'Complex systems',
-                'SCI3097':  'HCI',
-                'SCI3046':  'Game',
-                'SCI3070':  'Macadamia (minor)',
+                'SCI3053':  'Applied mathematics',
                 'SCI3059':  'Biomedical engineering',
-                'ELEC3029': 'Communications engineering',
-                'ELEC3049': 'SPDS',
+                'SCI3060':  'Complex systems',
+                'SCI3062':  'International design business management',
+                'SCI3068':  'Computer science (minor)',
+                'SCI3070':  'Macadamia (minor)',
+                'SCI3084':  'Security',
+                'SCI3085':  'Security and cloud computing (minor)',
+                'SCI3092':  'Bioinformatics and digital health',
+                'SCI3097':  'Human-computer interaction',
+                'SCI3113':  'SECCLO',
+
+                'SCI3020':  'EIT ICT Human-computer intearction and design',
+                'SCI3081':  'EIT ICT Cloud computing and services',
+                'SCI3095':  'EIT ICT Data science',
+                'SCI3102':  'EIT ICT Visual computing',
+                'SCI3115':  'EIT ICT Data science',
+
                 'ELEC3025': 'Control, robotics and autonomous systems',
-                'ELEC3060': 'Electronic and digital systems',
+                'ELEC3029': 'Communications engineering',
                 'ELEC3030': 'Acoustics and audio technology',
-                'ELEC3055': 'Autonomous systems'
-               }
+                'ELEC3031': 'Signal, speech and language processing',
+                'ELEC3049': 'Signal processing and data science',
+                'ELEC3055': 'Autonomous systems',
+                'ELEC3060': 'Electronic and digital systems',
+                'ELEC3068': 'Speech and language technology'
+              }
 
 use_cache = True
 
@@ -110,6 +120,9 @@ def html_to_dict(html, debug = False):
             for i in l2:
                 if i.text != ', ':
                     w.append(i.text)
+            if debug and len(w):
+                print(l1[0].text, w)
+
             if k=='Major/Subject' or k=='Oppiaine':
                 rec['major'] = v
             if k=='Mcode':
@@ -138,7 +151,22 @@ def html_to_dict(html, debug = False):
     if len(m)==1:
         v = m[0].tail
         rec['advisor'] = v.strip()
-                
+
+    abstxt = []
+    l = restree.xpath("//ds-aalto-item-abstract")
+    assert len(l)==1, 'failed with abstract 1'
+    for m in l[0].xpath('div/span'):
+        if m.text:
+            t = m.text.replace('\n', ' ').replace('  ', ' ')
+            abstxt.append(t)
+    # assert len(abstxt), 'failed with abstract 2'
+    if abstxt:
+        rec['abstract'] = ' | '.join(abstxt)    
+
+    l = restree.xpath("//a[@_ngcontent-sc450='']")
+    # assert len(l)<=1, 'failed with files'
+    rec['available'] = len(l)>0
+    
     # print(rec)
     
     return rec
@@ -162,6 +190,30 @@ def swap_name_not(n):
     return n[:p]+n[p+1:] if p>0 else None
     
 def fetch_faculty():
+    url = 'https://www.aalto.fi/en/department-of-computer-science/contact-us'
+    print(f'Scraping names of Aalto CS faculty members from {url}')
+    response = requests.request('GET', url)
+    if response.status_code!=200:
+        return None
+    html = response.text
+    #html = open('f.html').read()
+    l = []
+    for k, v in alias.items():
+        l.append(v)
+    restree = lxml_html.fromstring(hack_html(html))
+    tree    = lxml_etree.ElementTree(restree)
+    for td in restree.xpath("//div[@class='aalto-table-wrapper']/table/tbody/tr/td[1]"):
+        #print(td)
+        if td.text:
+            n = td.text.strip()
+        else: # <a>
+            n = td.getchildren()[0].text.strip()
+        #print(td, n)
+        if n!="Firstname Lastname" and n not in l:
+            l.append(n)
+    return l
+
+def fetch_faculty_old():
     url = 'https://www.aalto.fi/en/department-of-computer-science/faculty-members'
     print(f'Scraping names of Aalto CS faculty members from {url}')
     response = requests.request('GET', url)
@@ -181,7 +233,19 @@ def fetch_faculty():
             l.append(n)
     return l
 
-def request_with_loop(url, n):
+def request_with_loop_exclude_5xx(url, n):
+    for i in range(n):
+        time.sleep(i)
+        response = requests.request('GET', url)
+        s = response.status_code
+        if s<500 or s>599:
+            if s!=200:
+                return response
+            if response.text.find('<title>DSpace</title>')<0:
+                return response
+    return response
+
+def request_with_loop_old(url, n):
     for i in range(n):
         response = requests.request('GET', url)
         if response.status_code!=200:
@@ -215,7 +279,7 @@ def fetch_one_thesis(s, l, li, ln, url_base, dump_raw, debug):
             if debug:
                 print(f'    read cached     {cfile} -> {urlx}')
     else:
-        response = request_with_loop(urlx, 10)
+        response = request_with_loop_exclude_5xx(urlx, 10)
         if response.status_code!=200:
             print(i, urlx, l, 'error', response.status_code)
         elif response.text=='':
@@ -245,7 +309,7 @@ def fetch_one_thesis(s, l, li, ln, url_base, dump_raw, debug):
     d['url']    = urlx
     d['school'] = s[0]
     if jfilex:
-        open(jfilex, 'w').write(json.dumps(d, indent=4))
+        open(jfilex, 'w').write(json.dumps(d, indent=4)+'\n')
         if debug:
             print(f'    stored in JSON  {jfilex}')
 
@@ -266,7 +330,7 @@ def fetch_theses(max_pages, dump_raw, debug):
             if i>0:
                 url = f'{urlred}?cp.page={i+1}'
             print(f'  fetching {s[0]} {url}', flush=True)
-            response = request_with_loop(url, 10)
+            response = request_with_loop_exclude_5xx(url, 10)
             if response.status_code!=200:
                 print(i, url, 'error', response.status_code)
                 continue
@@ -289,6 +353,20 @@ def fetch_theses(max_pages, dump_raw, debug):
                 break
     return rec
 
+def fetch_theses_cache(debug):
+    r = []
+    for i in glob.glob('cache/*.json'):
+        d = json.loads(open(i).read())
+        r.append(d)
+    rec = []
+    for s in school_info:
+        a = []
+        for i in r:
+            if i['school']==s[0]:
+                a.append(i)
+        rec.extend(sorted(a, key=lambda d: d['issued'], reverse=True))
+    return rec
+    
 no_hit = set()
 
 def name_or_alias(n):
@@ -311,6 +389,8 @@ def name_or_alias(n):
 def match_record(r):
     f = set()
     for p in [ r['supervisor'] ]:
+        if p=='unknown':
+            continue
         n = swap_name(p)
         a = name_or_alias(n)
         if a is not None:
@@ -326,7 +406,9 @@ def match_record(r):
         if p>0:
             mc = mc[:p]
         assert len(mc)<9, f'too long major_code <{mc}>'
-        e = (swap_name(r['author']), r['title'], r['issued'], r['school'], mc)
+        av = 'AVAILABLE' if r['available'] else 'NOT available'
+        e = (swap_name(r['author']), r['title'], r['issued'], r['school'], mc, \
+             av, ', '.join(r['keywords']), r.get('abstract', '*** no abstract ***'))
         theses[n].append(e)
         #print('FOUND', n, ':', *e)
         if mc not in per_major_code:
@@ -431,7 +513,7 @@ def find_h_indices():
         if h_index:
             scholar[alias[n]] = (h_index, href)
             
-def show_theses(detail):
+def show_theses(detail, keywords):
     counts = []
     for p in people:
         m = ' '.join(sorted(majors[p])) if p in majors else ''
@@ -445,7 +527,10 @@ def show_theses(detail):
         if detail:
             for j in theses[i[1]]:
                 s = '' if j[3]=='SCI' else j[3][:3]
-                print(f'    {s:3s} {j[4]:8} {j[0]}: {j[1]}. {j[2]}')
+                print(f'    {s:3s} {j[4]:8} {j[0]}: {j[1]}. {j[2]}', end='')
+                if keywords:
+                    print(f'. {j[5]}. {j[6]}. {j[7]}', end='')
+                print()
     print(f'{sum:3d} TOTAL')
 
 split = {}
@@ -512,10 +597,14 @@ if __name__=="__main__":
     parser = argparse.ArgumentParser(description='Aalto CS Dept M.Sc. Thesis listing '
                                      +'per supervisor in 2021-24',
                                      epilog='See also alias.example.txt')
+    parser.add_argument('-f', '--fast', action='store_true',
+                        help='fast version: no downloads, just read cached JSON files')
     parser.add_argument('-y', '--years', type=str,
                         help='select years (comma-separated)')
     parser.add_argument('-d', '--detail', action='store_true',
                         help='show also authors, titles and issue dates')
+    parser.add_argument('-k', '--keywords', action='store_true',
+                        help='show also keywords and abstracts')
     parser.add_argument('-t', '--theses', type=str, choices=['dump', 'load', 'skip'],
                         help='either dump or load all theses to/from theses.json')
     parser.add_argument('-s', '--supervisors', type=str, choices=['dump', 'load'],
@@ -576,10 +665,13 @@ if __name__=="__main__":
         for i, j in json.loads(open('aliases.json').read()).items():
             alias[i] = j
 
-    # print(f'aliases: {alias}')
+    # print(f'Aliases: {alias}')
 
     if (args.theses is None and args.supervisors!='load') or args.theses=='dump':
-        rec = fetch_theses(args.max, args.raw, args.debug)
+        if not args.fast:
+            rec = fetch_theses(args.max, args.raw, args.debug)
+        else:
+            rec = fetch_theses_cache(args.debug)
 
     if args.theses=='dump':
         open('theses.json', 'w').write(json.dumps(rec))
@@ -623,7 +715,7 @@ if __name__=="__main__":
 
     #find_h_indices()
 
-    show_theses(args.detail)
+    show_theses(args.detail, args.keywords)
 
     split_theses()
 
