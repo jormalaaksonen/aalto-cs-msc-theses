@@ -6,6 +6,7 @@ import argparse
 import os
 import time
 import glob
+import pprint
 from lxml import html  as lxml_html
 from lxml import etree as lxml_etree
 
@@ -13,9 +14,9 @@ years = [ '2021', '2022', '2023', '2024' ]
 
 school_info_bsc = [ ('SCI',  'BSc', '045c30ab-bee2-4e5a-9fa1-89a9e18e087b', 52) ]
 
-school_info_msc = [ ('SCI',  'MSc', 'af72e803-f468-4c81-802c-7b8ff8602294', 71),
-                    ('ELEC', 'MSc', '9785ec69-7098-4c4a-88d8-32422966cd06', 38),
-                    ('ENG',  'MSc', 'fa8d40ed-d19a-4768-bd06-60b5d533195c', 53),
+school_info_msc = [ ('SCI',  'MSc', 'af72e803-f468-4c81-802c-7b8ff8602294', 75),
+                    ('ELEC', 'MSc', '9785ec69-7098-4c4a-88d8-32422966cd06', 40),
+                    ('ENG',  'MSc', 'fa8d40ed-d19a-4768-bd06-60b5d533195c', 56),
                     ('ARTS', 'MSc', '81ea0a41-6f6f-4cad-98a6-6e09bd6b8068', 61) ]
 
 school_info = []
@@ -100,6 +101,9 @@ def hack_html(html):
 
 def html_to_dict(html, debug = False):
     html2   = hack_html(html)
+    if html2.lower().find('html')<0:
+        print("Doesn't seem like an HTML file.")
+        return {}
     #print(html2)
     restree = lxml_html.fromstring(html2)
     tree    = lxml_etree.ElementTree(restree)
@@ -181,7 +185,9 @@ def html_to_dict(html, debug = False):
     l = restree.xpath("//a[@_ngcontent-sc450='']")
     # assert len(l)<=1, 'failed with files'
     rec['available'] = len(l)>0
-    
+    if len(l):
+        #print(l[0].attrib['href'])
+        rec['url_pdf'] = f'https://aaltodoc.aalto.fi{l[0].attrib["href"]}'
     # print(rec)
     
     return rec
@@ -321,8 +327,11 @@ def fetch_one_thesis(s, l, li, ln, url_base, dump_raw, debug):
             return ({}, True)
 
     # print(i, url, l, d['author'], flush=True)
-    d['url']    = urlx
-    d['school'] = s[0]
+    d['url_page'] = urlx
+    if jfilex:
+        d['cache_html'] = cfile
+        d['cache_json'] = jfilex
+    d['school']   = s[0]
     if jfilex:
         open(jfilex, 'w').write(json.dumps(d, indent=4)+'\n')
         if debug:
@@ -337,7 +346,7 @@ def fetch_one_thesis(s, l, li, ln, url_base, dump_raw, debug):
 def fetch_theses(max_pages, dump_raw, debug):
     rec = []
     for s in school_info:
-        print(f'Scraping {s[0]} school{s[1]}  will continue until cp.page={s[3]} or even longer...')
+        print(f'Scraping {s[0]} school {s[1]} will continue until cp.page={s[3]} or even longer...')
         urlred = None
         for i in range(max_pages):
             url_base = 'https://aaltodoc.aalto.fi'
@@ -345,7 +354,7 @@ def fetch_theses(max_pages, dump_raw, debug):
             url = f'{url_base}/collections/{s[2]}'
             if i>0:
                 url = f'{urlred}?cp.page={i+1}'
-            print(f'  fetching {s[0]} {url}', flush=True)
+            print(f'  fetching {s[0]} {s[1]} {url}', flush=True)
             response = request_with_loop_exclude_5xx(url, 10)
             if response.status_code!=200:
                 print(i, url, 'error', response.status_code)
@@ -374,7 +383,8 @@ def fetch_theses_cache(debug):
     for i in glob.glob(cache_dir+'/*.json'):
         #print(i)
         d = json.loads(open(i).read())
-        r.append(d)
+        if d.get('issued', '0000')[:4] in years:
+            r.append(d)
     rec = []
     for s in school_info:
         a = []
@@ -384,21 +394,70 @@ def fetch_theses_cache(debug):
                 a.append(i)
         rec.extend(sorted(a, key=lambda d: d['issued'], reverse=True))
     return rec
+
+def edit_dist(a, b):
+    debug = False
+    d = []
+    for i in range(1+len(a)):
+        d.append([0] * (1+len(b))) 
     
+    for j in range(1, 1+len(b)):
+        d[0][j] = d[0][j-1]+1
+    for i in range(1, 1+len(a)):
+        d[i][0] = d[i-1][0]+1
+
+    for j in range(len(b)):
+        for i in range(len(a)):
+            s = d[i][j]
+            x = d[i+1][j]
+            if x<s:
+                s = x
+            x = d[i][j+1]
+            if x<s:
+                s = x
+            s += 0 if a[i]==b[j] else 1
+            d[i+1][j+1] = s
+    v = d[-1][-1]
+    ax = ''.join(sorted([ i.lower() for i in a ]))
+    bx = ''.join(sorted([ i.lower() for i in b ]))
+    if debug:
+        print(a, b, v, ax, bx, ax==bx)
+        print(d)
+    return v-0.5 if ax==bx else v
+
 no_hit = set()
 
 def name_or_alias(n):
+    thr = 1
+    debug = False
+
+    if debug:
+        print(f'{n} xxxxx')
     if n in alias:
         return alias[n]
     if n in no_hit:
+        if debug:
+            print(f'{n} no_hit')
         return None
     nn = n.split()
     for i in theses.keys():
         mm = i.split()
+        if debug:
+            print(f'  {n} {mm}')
         l0 = len(nn[ 0]) if len(nn[ 0])<len(mm[ 0]) else len(mm[ 0])
         l1 = len(nn[-1]) if len(nn[-1])<len(mm[-1]) else len(mm[-1])
+        hit = False
         if (nn[ 0][:l0]==mm[ 0][:l0] or nn[ 0][-l0:]==mm[ 0][-l0:]) and \
            (nn[-1][:l1]==mm[-1][:l1] or nn[-1][-l1:]==mm[-1][-l1:]):
+            hit = True
+        if not hit and (nn[0]==mm[0] or nn[-1]==mm[-1]):
+            ed2 = edit_dist(nn[ 0], mm[ 0])
+            ed1 = edit_dist(nn[-1], mm[-1])
+            if debug:
+                print(f' edit distances: {ed1} + {ed2}')
+            if ed1+ed2<=thr:
+                hit = True
+        if hit:
             alias[n] = i
             return i
     no_hit.add(n)
@@ -443,7 +502,8 @@ def match_record(r, roles):
         if mc not in per_major_code:
             per_major_code[mc] = []
         per_major_code[mc].append(e)
-
+    return f
+        
 def find_names(t):
     f = set()
     for a in alias.keys():
@@ -619,7 +679,24 @@ def show_summary():
     for m, n in sorted(counts):
         print('{:6s} {:42s} {:5.2f} {:5.2f} {:5.2f}'.
               format(m, long_names[m][0:42], n['total'], n['size'], n['percap']))
-    
+
+def show_student(r, sin):
+    c = 0
+    s = sin.replace(',', '').split(' ')
+    for i in r:
+        a = i['author'].replace(',', '').split(' ')
+        hit = True
+        for j in s:
+            hit = hit and j in a
+        if hit:
+            if c:
+                print()
+            c += 1
+            m = match_record(i, ['supervisor', 'advisor'])
+            m = ', '.join(list(m))
+            print(f'Thesis by author "{sin}" #{c}: => {m}')
+            pprint.pp(i)
+            
 # -----------------------------------------------------------------------------
 
 if __name__=="__main__":
@@ -652,9 +729,14 @@ if __name__=="__main__":
     parser.add_argument('--max', type=int, default=100,
                         help='set maximum number of pages to be read per school, default=%(default)s')
     parser.add_argument('--parse', type=str,
-                        help='read in and parse given file and quit')
+                        help='read in and parse a given HTML file and quit')
+    parser.add_argument('--student', type=str,
+                        help='dump full information on one student and quit')
     args = parser.parse_args()
 
+    #print(edit_dist('abc', 'axbc'))
+    #exit(0)
+    
     if args.bsc:
         school_info = school_info_bsc
         cache_dir = 'cache/bsc'
@@ -670,9 +752,11 @@ if __name__=="__main__":
         print(d)
         exit(0)
 
-    if use_cache and not os.path.isdir('cache'):
+    if use_cache and not os.path.isdir('cache/msc'):
         os.mkdir('cache')
-        if not os.path.isdir('cache'):
+        os.mkdir('cache/bsc')
+        os.mkdir('cache/msc')
+        if not os.path.isdir('cache/msc'):
             print('Failed to create cache directory.')
             use_cache = False
     
@@ -734,6 +818,10 @@ if __name__=="__main__":
         theses[p] = []
         alias[p]  = p
 
+    if args.student:
+        show_student(rec, args.student)
+        exit(0)
+                
     if args.supervisors!='load':
         print('Matching {} records with {} faculty members'.format(len(rec), len(people)))
         for r in rec:
