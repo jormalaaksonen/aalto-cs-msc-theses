@@ -15,7 +15,7 @@ cached information in further invocations with the `--fast` switch:
 ./msc-theses.py --fast
 ```
 
-To see additionally the schools, authors, titles and issue dates of the theses, add `--details`:
+To see additionally the schools, authors, titles and issue dates of the theses, add `--detail`:
 ```
 ./msc-theses.py --fast --detail
 ```
