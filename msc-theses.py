@@ -19,6 +19,9 @@ school_info_msc = [ ('SCI',  'MSc', 'af72e803-f468-4c81-802c-7b8ff8602294', 75),
                     ('ENG',  'MSc', 'fa8d40ed-d19a-4768-bd06-60b5d533195c', 56),
                     ('ARTS', 'MSc', '81ea0a41-6f6f-4cad-98a6-6e09bd6b8068', 61) ]
 
+school_info_dsc = [ ('SCI',  'DSc', 'c019eaac-587a-4f4b-af66-fef325a15a25', 12),
+                    ('ELEC', 'DSc', '901639ca-22f7-4fbb-86dd-ec22d2746053',  8) ]
+
 school_info = []
 
 long_names = { 'aat'   : 'Acoustics and Audio Technology',
@@ -338,7 +341,7 @@ def fetch_one_thesis(s, l, li, ln, url_base, dump_raw, debug):
             print(f'    stored in JSON  {jfilex}')
 
     y = d['issued'][:4]
-    if y in years or y=='unkn':
+    if y in years or y=='unkn' or 'all' in years:
         return (d, False)
     else:
         return ({}, True)
@@ -346,7 +349,7 @@ def fetch_one_thesis(s, l, li, ln, url_base, dump_raw, debug):
 def fetch_theses(max_pages, dump_raw, debug):
     rec = []
     for s in school_info:
-        print(f'Scraping {s[0]} school {s[1]} will continue until cp.page={s[3]} or even longer...')
+        print(f'Scraping {s[0]} school {s[1]} theses will continue until cp.page={s[3]} or even longer...')
         urlred = None
         for i in range(max_pages):
             url_base = 'https://aaltodoc.aalto.fi'
@@ -383,7 +386,7 @@ def fetch_theses_cache(debug):
     for i in glob.glob(cache_dir+'/*.json'):
         #print(i)
         d = json.loads(open(i).read())
-        if d.get('issued', '0000')[:4] in years:
+        if d.get('issued', '0000')[:4] in years or 'all' in years:
             r.append(d)
     rec = []
     for s in school_info:
@@ -467,10 +470,10 @@ def match_record(r, roles):
     rr = []
     for i in roles:
         if r.get(i, '')!='':
-            rr.append(r[i])
-    #print(rr)
-    f = set()
-    for pp in rr:
+            rr.append((r[i], i))
+    # print(rr)
+    fl = []
+    for pp, ppr in rr:
         if pp=='unknown':
             continue
         p = pp
@@ -482,13 +485,18 @@ def match_record(r, roles):
         n = swap_name(p)
         a = name_or_alias(n)
         if a is not None:
-            f.add(a)
+            fl.append((a, ppr))
         else: ## odd cases "firstname, familyname"
             n = swap_name_not(p)
             a = name_or_alias(n)
             if a is not None:
-                f.add(a)
-    for n in f:
+                fl.append((a, ppr))
+    f = {}
+    for iname, irole in fl:
+        if irole=='supervisor' or iname not in f:
+            f[iname] = irole
+            
+    for n, role in f.items():
         mc = r.get('major_code', 'unknown')
         p = mc.find(' ')
         if p>0:
@@ -496,12 +504,14 @@ def match_record(r, roles):
         assert len(mc)<9, f'too long major_code <{mc}>'
         av = 'AVAILABLE' if r['available'] else 'NOT available'
         e = (swap_name(r['author']), r['title'], r['issued'], r['school'], mc, \
-             av, ', '.join(r['keywords']), r.get('abstract', '*** no abstract ***'))
+             av, ', '.join(r['keywords']), r.get('abstract', '*** no abstract ***'), \
+             role)
         theses[n].append(e)
         #print('FOUND', n, ':', *e)
         if mc not in per_major_code:
             per_major_code[mc] = []
         per_major_code[mc].append(e)
+
     return f
         
 def find_names(t):
@@ -565,7 +575,7 @@ def find_majors():
 
 scholar = {}
                         
-def find_h_indices():
+def find_google_data():
     for n in alias:
         if alias[n] in scholar:
             continue
@@ -602,7 +612,7 @@ def find_h_indices():
         if h_index:
             scholar[alias[n]] = (h_index, href)
             
-def show_theses(detail, keywords):
+def show_theses(detail, keywords, role):
     counts = []
     for p in people:
         m = ' '.join(sorted(majors[p])) if p in majors else ''
@@ -616,7 +626,12 @@ def show_theses(detail, keywords):
         if detail:
             for j in theses[i[1]]:
                 s = '' if j[3]=='SCI' else j[3][:3]
-                print(f'    {s:3s} {j[4]:8} {j[0]}: {j[1]}. {j[2]}', end='')
+                if not role:
+                    ffield = f'{j[4]:8}'
+                else:
+                    ffield = '(S)' if j[8]=='supervisor' \
+                        else '(A)' if j[8]=='advisor' else '(?)'
+                print(f'    {s:3s} {ffield} {j[0]}: {j[1]}. {j[2]}', end='')
                 if keywords:
                     print(f'. {j[5]}. {j[6]}. {j[7]}', end='')
                 print()
@@ -693,7 +708,8 @@ def show_student(r, sin):
                 print()
             c += 1
             m = match_record(i, ['supervisor', 'advisor'])
-            m = ', '.join(list(m))
+            m = [ f'{n} ({r})' for n, r in m.items() ]
+            m = ', '.join(m)
             print(f'Thesis by author "{sin}" #{c}: => {m}')
             pprint.pp(i)
             
@@ -705,10 +721,12 @@ if __name__=="__main__":
                                      epilog='See also alias.example.txt')
     parser.add_argument('-b', '--bsc', action='store_true',
                         help='show BSc theses instead of MSc')
+    parser.add_argument(      '--dsc', action='store_true',
+                        help='show DSc theses instead of MSc')
     parser.add_argument('-f', '--fast', action='store_true',
                         help='fast version: no downloads, just read cached JSON files')
     parser.add_argument('-y', '--years', type=str,
-                        help='select years (comma-separated)')
+                        help='select years (comma-separated or "all")')
     parser.add_argument('-d', '--detail', action='store_true',
                         help='show also authors, titles and issue dates')
     parser.add_argument('-k', '--keywords', action='store_true',
@@ -741,6 +759,10 @@ if __name__=="__main__":
         school_info = school_info_bsc
         cache_dir = 'cache/bsc'
         roles = ['advisor']
+    elif args.dsc:
+        school_info = school_info_dsc
+        cache_dir = 'cache/dsc'
+        roles = ['advisor', 'supervisor']
     else:
         school_info = school_info_msc
         cache_dir = 'cache/msc'
@@ -752,13 +774,14 @@ if __name__=="__main__":
         print(d)
         exit(0)
 
-    if use_cache and not os.path.isdir('cache/msc'):
-        os.mkdir('cache')
-        os.mkdir('cache/bsc')
-        os.mkdir('cache/msc')
-        if not os.path.isdir('cache/msc'):
-            print('Failed to create cache directory.')
-            use_cache = False
+    if use_cache:
+        for d in [ 'cache', 'cache/bsc', 'cache/msc', 'cache/dsc' ]:
+            if not os.path.isdir(d):
+                try:
+                    os.mkdir(d)
+                except:
+                    print(f'Failed to create cache directory "{d}", caching disabled.')
+                    use_cache = False
     
     if args.years:
         years = args.years.split(',')
@@ -806,7 +829,7 @@ if __name__=="__main__":
         print('Loaded from theses.json')
         rec = []
         for i in rec_all:
-            if i['issued'][:4] in years:
+            if i['issued'][:4] in years or 'all' in years:
                 rec.append(i)
 
     #print(rec)
@@ -841,9 +864,9 @@ if __name__=="__main__":
 
     #find_majors()
 
-    #find_h_indices()
+    #find_google_data()
 
-    show_theses(args.detail, args.keywords)
+    show_theses(args.detail, args.keywords, args.dsc)
 
     split_theses()
 
