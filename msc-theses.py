@@ -5,6 +5,7 @@ import json
 import argparse
 import os
 import time
+import datetime
 import glob
 import pprint
 from lxml import html  as lxml_html
@@ -436,6 +437,9 @@ def name_or_alias(n):
 
     if debug:
         print(f'{n} xxxxx')
+    if n is None:
+        return n
+    
     if n in alias:
         return alias[n]
     if n in no_hit:
@@ -488,6 +492,9 @@ def match_record(r, roles):
             fl.append((a, ppr))
         else: ## odd cases "firstname, familyname"
             n = swap_name_not(p)
+            # print(f'p="{p}" n="{n}"')
+            # if n is None:
+            #     print(r)
             a = name_or_alias(n)
             if a is not None:
                 fl.append((a, ppr))
@@ -573,30 +580,86 @@ def find_majors():
                             add_to_majors(a, j)
                         print('  {} ({}) found: {}'.format(s, j,', '.join(sorted(f))))
 
+google_data_file = 'google-data.txt'
+scholar_data = None
+def google_data(n):
+    global scholar_data
+    if scholar_data is None:
+        scholar_data = dict()
+        try:
+            with open(google_data_file) as f:
+                for l in f:
+                    l = l.split('#')[0].strip()
+                    if l=='':
+                        continue
+                    l = l.split(' ')
+                    a = []
+                    for i in l:
+                        if i!='':
+                            a.append(i)
+                    if len(a)!=9:
+                        continue
+                    do_add = a[0] not in scholar_data
+                    if not do_add:
+                        do_add = scholar_data[a[0]][2]<a[2]
+                    if do_add:
+                        scholar_data[a[0]] = a
+        except:
+            pass
+        
+    n = n.replace(' ', '')
+    if n in scholar_data:
+        return scholar_data[n]
+    return [ None ] * 9
+    
 scholar = {}
                         
-def find_google_data():
-    for n in alias:
-        if alias[n] in scholar:
+def fetch_google_data():
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    for n, na in alias.items():
+        # print(n)
+        if na in scholar:
             continue
+
+        gval = google_data(na)
+        xtime = gval[1]
+        now = datetime.datetime.now()
+        if xtime is not None:
+            xxtime = datetime.datetime.fromisoformat(xtime)
+            #print(xxtime)
+            td = now-xxtime
+            #print(td)
+            if td<datetime.timedelta(days=28):
+                gvalstr = ' '.join(map(str, gval))
+                print(f'Scholar scraping skipped due to recent data: {gvalstr}')
+                continue
+            
         nx = n.replace(' ', '+')
         url = 'https://scholar.google.com/scholar?q='+nx
-        response = requests.request('GET', url)
+        time.sleep(1)
+        response = requests.request('GET', url, headers=headers)
         if response.status_code!=200:
-            print('Reading {} failed'.format(url))
+            print(f'Reading {url} failed: {response.status_code}')
+            if response.status_code==429:
+                print('... Skipping the rest of the faculty this time. '
+                      'Try again later ...')
+                break
             continue
+        #print(f'Reading {url} SUCCESSFUL')
         restrees = lxml_html.fromstring(response.text)
         trees    = lxml_etree.ElementTree(restrees)
-        h_index = None
+        href = None
+        val = []
         for a in restrees.xpath("//h4[@class='gs_rt2']/a"):
             href = a.attrib['href']
             #print(a, href)
             if href.find('&')>0:
                 href = 'https://scholar.google.com'+href[:href.find('&')]
                 #print(href)
-                response = requests.request('GET', href)
+                time.sleep(1)
+                response = requests.request('GET', href, headers=headers)
                 if response.status_code!=200:
-                    print('Reading {} failed'.format(url))
+                    print(f'Reading {href} failed: {response.status_code}')
                     continue
                 aalto = response.text.lower().find('aalto')>0
                 if aalto:
@@ -605,13 +668,26 @@ def find_google_data():
                     val = []
                     for td in restreep.xpath("//td[@class='gsc_rsb_std']"):
                         val.append(int(td.text))
-                    h_index = val[2]
                     break
                 
-        print('{} ({}) {} {}'.format(alias[n], n, h_index, href))
-        if h_index:
-            scholar[alias[n]] = (h_index, href)
-            
+        #print(f'{na} {n} {nx} {href} {val}')
+        if href is not None and len(val)==6:
+            p = href.find('?user=')
+            idn = href[p+6:] if p>0 else "???"
+            nn = na.replace(' ', '')
+            dt = now.isoformat()
+            gval = [nn, dt, idn, val[0], val[2], val[4], val[1], val[3], val[5]]
+            gvalstr = ' '.join(map(str, gval))
+            #print(gvalstr)
+            scholar[nn] = gval
+            try:
+                with open(google_data_file, 'a') as fp:
+                    print(gvalstr, file=fp)
+                    print(f'Appended "{gvalstr}" in {google_data_file}')
+            except:
+                print(f'Appending "{gvalstr}" in {google_data_file} failed')
+            #break
+
 def show_theses(detail, keywords, role):
     counts = []
     for p in people:
@@ -621,7 +697,14 @@ def show_theses(detail, keywords, role):
     #print(counts)
     sum = 0
     for i in counts:
-        print(f'{i[0]:3d} {i[1]} ({i[2]})')
+        group = i[2] # currently empty
+        _,_,_, cites, hidx, _,_,_,_ = google_data(i[1]) 
+        if cites:
+            scholar = f'h-idx: {hidx}, cites: {cites}'
+        else:
+            scholar = ''
+        
+        print(f'{i[0]:3d} {i[1]} ({scholar})')
         sum += i[0]
         if detail:
             for j in theses[i[1]]:
@@ -744,12 +827,14 @@ if __name__=="__main__":
                         help='store raw HTML files for error hunting')
     parser.add_argument('--debug', action='store_true',
                         help='be more verbose')
-    parser.add_argument('--max', type=int, default=100,
+    parser.add_argument('--max', type=int, default=300,
                         help='set maximum number of pages to be read per school, default=%(default)s')
     parser.add_argument('--parse', type=str,
                         help='read in and parse a given HTML file and quit')
     parser.add_argument('--student', type=str,
                         help='dump full information on one student and quit')
+    parser.add_argument('--google', action='store_true',
+                        help='fetch Google Scholar data')
     args = parser.parse_args()
 
     #print(edit_dist('abc', 'axbc'))
@@ -814,6 +899,17 @@ if __name__=="__main__":
 
     # print(f'Aliases: {alias}')
 
+    people = fetch_faculty()
+    #print(people)
+
+    for p in people:
+        theses[p] = []
+        alias[p]  = p
+
+    if args.google:
+        fetch_google_data()
+        exit(0)
+    
     if (args.theses is None and args.supervisors!='load') or args.theses=='dump':
         if not args.fast:
             rec = fetch_theses(args.max, args.raw, args.debug)
@@ -833,13 +929,6 @@ if __name__=="__main__":
                 rec.append(i)
 
     #print(rec)
-
-    people = fetch_faculty()
-    #print(people)
-
-    for p in people:
-        theses[p] = []
-        alias[p]  = p
 
     if args.student:
         show_student(rec, args.student)
@@ -863,8 +952,6 @@ if __name__=="__main__":
         print('Dumped to alias.json')
 
     #find_majors()
-
-    #find_google_data()
 
     show_theses(args.detail, args.keywords, args.dsc)
 
