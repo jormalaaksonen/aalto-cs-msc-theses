@@ -612,13 +612,83 @@ def google_data(n):
         return scholar_data[n]
     return [ None ] * 9
     
+
+def fetch_google_data_inner(n, debug, save):
+    headers = {'User-Agent': 'Mozilla/5.0'}
+
+    nx = n.replace(' ', '+')
+    #url = 'https://scholar.google.com/scholar?q='+nx
+    url = f'https://scholar.google.com/citations?view_op=search_authors&mauthors={nx}'
+    time.sleep(1)
+    response = requests.request('GET', url, headers=headers)
+    if response.status_code!=200:
+        print(f'Reading {url} failed: {response.status_code}')
+        if response.status_code==429:
+            return False
+        return True
+    if debug:
+        print(f'Reading {url} SUCCESSFUL')
+    if save:
+        fname = f'g-{nx}.html'
+        print(response.text, file=open(fname, 'w'))
+        print(f'Saved HTML in {fname}')
+        
+    restrees = lxml_html.fromstring(response.text)
+    trees    = lxml_etree.ElementTree(restrees)
+    href = None
+    val = []
+    for a in restrees.xpath("//h3[@class='gs_ai_name']/a"): # "//h4[@class='gs_rt2']/a"
+        href  = a.attrib['href']
+        if href.find('&')>0:
+            hrefx = href
+            u = hrefx.find('user=')
+            if u>0:
+                hrefx = hrefx[u+5:]
+            u = hrefx.find('&')
+            if u>0:
+                hrefx = hrefx[:u]
+            if debug:
+                print(f'Trying {href} -> {hrefx}')
+            href = 'https://scholar.google.com'+href
+            #print(href)
+            time.sleep(1)
+            response = requests.request('GET', href, headers=headers)
+            if response.status_code!=200:
+                print(f'Reading {href} failed: {response.status_code}')
+                continue
+            if debug:
+                print(f'Reading {href} SUCCESSFUL')
+            if save:
+                fname = f'g-{hrefx}.html'
+                print(response.text, file=open(fname, 'w'))
+                print(f'Saved HTML in {fname}')
+
+            aalto = response.text.lower().find('aalto')>0
+            if aalto:
+                if debug:
+                    print('  aalto found')
+                restreep = lxml_html.fromstring(response.text)
+                treep    = lxml_etree.ElementTree(restreep)
+                val = []
+                for td in restreep.xpath("//td[@class='gsc_rsb_std']"):
+                    val.append(int(td.text))
+                    if debug:
+                        print(f'  value "{td.text}" found')
+                return hrefx, val
+    return True
+            
+
 scholar = {}
                         
 def fetch_google_data():
-    headers = {'User-Agent': 'Mozilla/5.0'}
+    debug = False
+    all_na, found_na = set(), set()
+    aborted = False
     for n, na in alias.items():
         # print(n)
-        if na in scholar:
+        all_na.add(na)
+        nn = na.replace(' ', '')
+        if nn in scholar:
             continue
 
         gval = google_data(na)
@@ -630,63 +700,48 @@ def fetch_google_data():
             td = now-xxtime
             #print(td)
             if td<datetime.timedelta(days=28):
+                found_na.add(na)
+                scholar[nn] = gval
                 gvalstr = ' '.join(map(str, gval))
                 print(f'Scholar scraping skipped due to recent data: {gvalstr}')
                 continue
             
-        nx = n.replace(' ', '+')
-        url = 'https://scholar.google.com/scholar?q='+nx
-        time.sleep(1)
-        response = requests.request('GET', url, headers=headers)
-        if response.status_code!=200:
-            print(f'Reading {url} failed: {response.status_code}')
-            if response.status_code==429:
-                print('... Skipping the rest of the faculty this time. '
-                      'Try again later ...')
-                break
+        r = fetch_google_data_inner(n, debug, False)
+
+        if r==False:
+            print('... Skipping the rest of the faculty this time. '
+                  'Try again later ...')
+            aborted = True
             continue
-        #print(f'Reading {url} SUCCESSFUL')
-        restrees = lxml_html.fromstring(response.text)
-        trees    = lxml_etree.ElementTree(restrees)
-        href = None
-        val = []
-        for a in restrees.xpath("//h4[@class='gs_rt2']/a"):
-            href = a.attrib['href']
-            #print(a, href)
-            if href.find('&')>0:
-                href = 'https://scholar.google.com'+href[:href.find('&')]
-                #print(href)
-                time.sleep(1)
-                response = requests.request('GET', href, headers=headers)
-                if response.status_code!=200:
-                    print(f'Reading {href} failed: {response.status_code}')
-                    continue
-                aalto = response.text.lower().find('aalto')>0
-                if aalto:
-                    restreep = lxml_html.fromstring(response.text)
-                    treep    = lxml_etree.ElementTree(restreep)
-                    val = []
-                    for td in restreep.xpath("//td[@class='gsc_rsb_std']"):
-                        val.append(int(td.text))
-                    break
-                
-        #print(f'{na} {n} {nx} {href} {val}')
-        if href is not None and len(val)==6:
-            p = href.find('?user=')
-            idn = href[p+6:] if p>0 else "???"
-            nn = na.replace(' ', '')
+
+        if r==True:
+            continue
+
+        idn = r[0]
+        val = r[1]
+            
+        #print(f'{na} {n} {nx} {idn} {val}')
+        if idn is not None and len(val)==6:
             dt = now.isoformat()
             gval = [nn, dt, idn, val[0], val[2], val[4], val[1], val[3], val[5]]
             gvalstr = ' '.join(map(str, gval))
             #print(gvalstr)
+            found_na.add(na)
             scholar[nn] = gval
             try:
                 with open(google_data_file, 'a') as fp:
                     print(gvalstr, file=fp)
-                    print(f'Appended "{gvalstr}" in {google_data_file}')
+                    print(f'Appended in {google_data_file} "{gvalstr}"')
             except:
                 print(f'Appending "{gvalstr}" in {google_data_file} failed')
             #break
+
+    if not aborted:
+        for i in found_na:
+            all_na.remove(i)
+        if all_na:
+            print("The following faculty members don't have "+ \
+                  f"Aalto Google Scholar page: {', '.join(list(all_na))}")
 
 def show_theses(detail, keywords, role):
     counts = []
@@ -838,6 +893,9 @@ if __name__=="__main__":
     args = parser.parse_args()
 
     #print(edit_dist('abc', 'axbc'))
+    #exit(0)
+
+    #print(fetch_google_data_inner('', True, True))
     #exit(0)
     
     if args.bsc:
