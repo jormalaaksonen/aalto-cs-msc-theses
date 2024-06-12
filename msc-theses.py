@@ -369,7 +369,8 @@ def fetch_theses(max_pages, dump_raw, debug):
                 urlred = response.url
             ll = html_to_links(response.text)
             if len(ll)==0:
-                print(i, url, 'failed')                
+                print(i, url, 'failed with no links')
+                continue
 
             do_break = True
             for li, l in enumerate(ll):
@@ -601,9 +602,9 @@ def google_data(n):
                         continue
                     do_add = a[0] not in scholar_data
                     if not do_add:
-                        do_add = scholar_data[a[0]][2]<a[2]
+                        do_add = scholar_data[a[0]][1]<a[1]
                     if do_add:
-                        scholar_data[a[0]] = a
+                        scholar_data[a[0]] = [ i if i!='-' else None for i in a ]
         except:
             pass
         
@@ -680,18 +681,41 @@ def fetch_google_data_inner(n, debug, save):
 
 scholar = {}
                         
-def fetch_google_data():
-    debug = False
-    all_na, found_na = set(), set()
-    aborted = False
+def fetch_google_data(debug):
+    skipdays = 14
+    
+    ss = set()
+    order = []
     for n, na in alias.items():
-        # print(n)
+        nn = na.replace(' ', '')
+        if nn in ss:
+            continue
+        gval = google_data(na)
+        t = gval[1]
+        if t is None:
+            t = '2000-01-01T00:00:00.000000'
+        t = datetime.datetime.fromisoformat(t)
+        order.append([n, na, t])
+    order.sort(key=lambda x: x[2])
+    # for i in order:
+    #     print(i)
+    # return
+        
+    all_na, found_na, skipped_na = set(), set(), set()
+    aborted = False
+    for n, na, tt in order:
+        if debug:
+            print(n, na, tt)
         all_na.add(na)
         nn = na.replace(' ', '')
         if nn in scholar:
+            if debug:
+                print('found in dict and skipping')
             continue
 
         gval = google_data(na)
+        if debug:
+            print(f'google_data({na}) : {gval}')
         xtime = gval[1]
         now = datetime.datetime.now()
         if xtime is not None:
@@ -699,11 +723,16 @@ def fetch_google_data():
             #print(xxtime)
             td = now-xxtime
             #print(td)
-            if td<datetime.timedelta(days=28):
-                found_na.add(na)
-                scholar[nn] = gval
+            skip = td<datetime.timedelta(days=skipdays)
+            if debug:
+                print(f'{now} - {xxtime} = {td} skip={skip}')
+            if skip:
+                if gval[2] is not None:
+                    found_na.add(na)
+                    scholar[nn] = gval
                 gvalstr = ' '.join(map(str, gval))
                 print(f'Scholar scraping skipped due to recent data: {gvalstr}')
+                skipped_na.add(na)
                 continue
             
         r = fetch_google_data_inner(n, debug, False)
@@ -742,6 +771,16 @@ def fetch_google_data():
         if all_na:
             print("The following faculty members don't have "+ \
                   f"Aalto Google Scholar page: {', '.join(list(all_na))}")
+            dt = datetime.datetime.now().isoformat()
+            for i in all_na:
+                if i not in skipped_na:
+                    try:
+                        with open(google_data_file, 'a') as fp:
+                            gvalstr = i.replace(' ', '')+f' {dt} - - - - - - -'
+                            print(gvalstr, file=fp)
+                            print(f'Appended in {google_data_file} "{gvalstr}"')
+                    except:
+                        print(f'Appending "{gvalstr}" in {google_data_file} failed')
 
 def show_theses(detail, keywords, role):
     counts = []
@@ -897,6 +936,9 @@ if __name__=="__main__":
 
     #print(fetch_google_data_inner('', True, True))
     #exit(0)
+
+    #print(google_data(''))
+    #exit(0)
     
     if args.bsc:
         school_info = school_info_bsc
@@ -965,7 +1007,7 @@ if __name__=="__main__":
         alias[p]  = p
 
     if args.google:
-        fetch_google_data()
+        fetch_google_data(args.debug)
         exit(0)
     
     if (args.theses is None and args.supervisors!='load') or args.theses=='dump':
