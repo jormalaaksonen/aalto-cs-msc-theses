@@ -12,6 +12,7 @@ from lxml import html  as lxml_html
 from lxml import etree as lxml_etree
 
 years = [ '2021', '2022', '2023', '2024' ]
+major = None
 
 school_info_bsc = [ ('SCI',  'BSc', '045c30ab-bee2-4e5a-9fa1-89a9e18e087b', 52) ]
 
@@ -341,8 +342,9 @@ def fetch_one_thesis(s, l, li, ln, url_base, dump_raw, debug):
         if debug:
             print(f'    stored in JSON  {jfilex}')
 
-    y = d['issued'][:4]
-    if y in years or y=='unkn' or 'all' in years:
+    y  = d['issued'][:4]
+    mc = d.get('major_code', 'unknown')
+    if (y in years or 'all' in years) and (major is None or mc==major):
         return (d, False)
     else:
         return ({}, True)
@@ -387,8 +389,10 @@ def fetch_theses_cache(debug):
     r = []
     for i in glob.glob(cache_dir+'/*.json'):
         #print(i)
-        d = json.loads(open(i).read())
-        if d.get('issued', '0000')[:4] in years or 'all' in years:
+        d  = json.loads(open(i).read())
+        y  = d.get('issued', '0000')[:4]
+        mc = d.get('major_code', 'unknown')
+        if (y in years or 'all' in years) and (major is None or mc==major):
             r.append(d)
     rec = []
     for s in school_info:
@@ -509,6 +513,7 @@ def match_record(r, roles):
         p = mc.find(' ')
         if p>0:
             mc = mc[:p]
+            
         assert len(mc)<9, f'too long major_code <{mc}>'
         av = 'AVAILABLE' if r['available'] else 'NOT available'
         e = (swap_name(r['author']), r['title'], r['issued'], r['school'], mc, \
@@ -904,6 +909,8 @@ if __name__=="__main__":
                         help='fast version: no downloads, just read cached JSON files')
     parser.add_argument('-y', '--years', type=str,
                         help='select years (comma-separated or "all")')
+    parser.add_argument('-m', '--major', type=str,
+                        help='select a specific major such as "SCI3044"')
     parser.add_argument('-d', '--detail', action='store_true',
                         help='show also authors, titles and issue dates')
     parser.add_argument('-k', '--keywords', action='store_true',
@@ -971,6 +978,9 @@ if __name__=="__main__":
     if args.years:
         years = args.years.split(',')
 
+    if args.major:
+        major = args.major
+
     alines = []
     if os.path.isfile('alias.txt'):
         with open('alias.txt') as f:
@@ -1025,6 +1035,7 @@ if __name__=="__main__":
         print('Loaded from theses.json')
         rec = []
         for i in rec_all:
+            # does not check args.major
             if i['issued'][:4] in years or 'all' in years:
                 rec.append(i)
 
