@@ -905,6 +905,8 @@ if __name__=="__main__":
                         help='show BSc theses instead of MSc')
     parser.add_argument(      '--dsc', action='store_true',
                         help='show DSc theses instead of MSc')
+    parser.add_argument(      '--roles', type=str,
+                        help='specify comma-separated roles "advisor" and/or "supervisor"')
     parser.add_argument('-f', '--fast', action='store_true',
                         help='fast version: no downloads, just read cached JSON files')
     parser.add_argument('-y', '--years', type=str,
@@ -959,7 +961,10 @@ if __name__=="__main__":
         school_info = school_info_msc
         cache_dir = 'cache/msc'
         roles = ['supervisor']
-    
+
+    if args.roles:
+        roles = args.roles.split(',')
+        
     if args.parse:
         s = open(args.parse).read()
         d = html_to_dict(s, True)
@@ -1064,7 +1069,7 @@ if __name__=="__main__":
 
     #find_majors()
 
-    show_theses(args.detail, args.keywords, args.dsc)
+    show_theses(args.detail, args.keywords, args.dsc or args.roles)
 
     split_theses()
 
