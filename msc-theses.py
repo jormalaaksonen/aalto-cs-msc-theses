@@ -17,9 +17,9 @@ major = None
 school_info_bsc = [ ('SCI',  'BSc', '045c30ab-bee2-4e5a-9fa1-89a9e18e087b', 63),
                     ('ELEC', 'BSc', '310a65a5-b8ba-44dc-9b26-da36cc4414d8', 48) ]
 
-school_info_msc = [ ('SCI',  'MSc', 'af72e803-f468-4c81-802c-7b8ff8602294', 83),
-                    ('ELEC', 'MSc', '9785ec69-7098-4c4a-88d8-32422966cd06', 44),
-                    ('ENG',  'MSc', 'fa8d40ed-d19a-4768-bd06-60b5d533195c', 63),
+school_info_msc = [ ('SCI',  'MSc', 'af72e803-f468-4c81-802c-7b8ff8602294', 87),
+                    ('ELEC', 'MSc', '9785ec69-7098-4c4a-88d8-32422966cd06', 46),
+                    ('ENG',  'MSc', 'fa8d40ed-d19a-4768-bd06-60b5d533195c', 67),
                     ('ARTS', 'MSc', '81ea0a41-6f6f-4cad-98a6-6e09bd6b8068', 72) ]
 
 school_info_dsc = [ ('SCI',  'DSc', 'c019eaac-587a-4f4b-af66-fef325a15a25', 13),
