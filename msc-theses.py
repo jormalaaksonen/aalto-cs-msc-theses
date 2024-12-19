@@ -92,6 +92,24 @@ major_names = { # BSc
                 'ELEC3068': 'Speech and language technology'
               }
 
+# ??? Security and Cloud Computing
+# ??? Machine Learning, Data Science and Artificial Intelligenc
+# ??? Human-Computer Interaction and Design
+# ??? Software and Service Engineering
+# ??? Machine Learning, Data Science and Artificial Intelligence (sivuaine
+# ??? Cloud and Network Infrastructures
+
+major_names_inv = {}
+for k, v in major_names.items():
+    if k in ['SCI3095']:
+        continue
+    if v.find('EIT ICT ')==0:
+        v = v[8:]
+    v = v.lower()
+    assert v not in major_names_inv, \
+        f'major_names_inv[] not unique "{v}" -> {major_names_inv[v]} vs {k}'
+    major_names_inv[v] = k
+
 use_cache = True
 cache_dir = None
 
@@ -199,10 +217,13 @@ def html_to_dict(html, debug = False):
     return rec
 
 def html_to_links(html):
-    l = []
-    restree = lxml_html.fromstring(hack_html(html))
-    tree    = lxml_etree.ElementTree(restree)
-    for a in restree.xpath("//div[@_ngcontent-sc57='']/a[@_ngcontent-sc60='']"): # 
+    l        = []
+    restree  = lxml_html.fromstring(hack_html(html))
+    tree     = lxml_etree.ElementTree(restree)
+    #a_xpath = "//div[@_ngcontent-sc57='']/a[@_ngcontent-sc60='']"
+    #a_xpath = "//div[@_ngcontent-dspace-angular-c79='']/a[@_ngcontent-dspace-angular-c127='']"
+    a_xpath  = "//ds-truncatable/div/a"
+    for a in restree.xpath(a_xpath):
         href = a.attrib['href']
         # print(a, href)
         l.append(href)
@@ -282,6 +303,22 @@ def request_with_loop_old(url, n):
         time.sleep(i)
     return response
 
+def solve_major_code(rec):
+    if 'major_code' in rec:
+        return rec['major_code']
+    
+    # if 'major' in rec:
+    #     mc = 'unsolvd'
+    #     m = rec['major'].lower()
+    #     if m in major_names_inv:
+    #         mc = major_names_inv[m]
+    #     print()
+    #     print(f'SOLVE MAJOR CODE {mc} {rec["major"]}')
+    #     return f'?{rec["major"]:.6}'
+
+    return 'unknown'
+
+
 def fetch_one_thesis(s, l, li, ln, url_base, dump_raw, debug):
     rawi = 0
     print(f'{li}/{ln}\r', end='', flush=True)
@@ -344,7 +381,7 @@ def fetch_one_thesis(s, l, li, ln, url_base, dump_raw, debug):
             print(f'    stored in JSON  {jfilex}')
 
     y  = d['issued'][:4]
-    mc = d.get('major_code', 'unknown')
+    mc = solve_major_code(d)
     if (y in years or 'all' in years) and (major is None or mc==major):
         return (d, False)
     else:
@@ -392,7 +429,7 @@ def fetch_theses_cache(debug):
         #print(i)
         d  = json.loads(open(i).read())
         y  = d.get('issued', '0000')[:4]
-        mc = d.get('major_code', 'unknown')
+        mc = solve_major_code(d)
         if (y in years or 'all' in years) and (major is None or mc==major):
             r.append(d)
     rec = []
@@ -510,7 +547,7 @@ def match_record(r, roles):
             f[iname] = irole
             
     for n, role in f.items():
-        mc = r.get('major_code', 'unknown')
+        mc = solve_major_code(r)
         p = mc.find(' ')
         if p>0:
             mc = mc[:p]
