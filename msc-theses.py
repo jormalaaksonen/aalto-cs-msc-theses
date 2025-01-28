@@ -252,8 +252,7 @@ def fetch_faculty(debug):
     tree    = lxml_etree.ElementTree(restree)
     if debug:
         print(tree)
-    #for td in restree.xpath("//div[@class='aalto-table-wrapper']/table/tbody/tr/td[1]"):
-    for td in restree.xpath("//div[@class='aalto-table-wrapper']/table/tbody"):
+    for td in restree.xpath("//div[@class='aalto-table-wrapper']/table/tbody/tr/td[1]"):
         if debug:
             print(td)
         if td.text:
@@ -968,11 +967,11 @@ def dump_alias_txt(f):
     for k,v in alias.items():
         if v not in z:
             if k!=v:
-                print(f'[{k}] : [{v}]')
+                # print(f'[{k}] : [{v}]')
                 l.append(f'{k} : {v}')
                 z.add(v)
             else:
-                print(f'[{k}]')
+                # print(f'[{k}]')
                 l.append(k)
             
     with open(f, 'w') as fp:
