@@ -11,7 +11,7 @@ import pprint
 from lxml import html  as lxml_html
 from lxml import etree as lxml_etree
 
-years = [ '2021', '2022', '2023', '2024' ]
+years = [ '2021', '2022', '2023', '2024', '2025' ]
 major = None
 
 school_info_bsc = [ ('SCI',  'BSc', '045c30ab-bee2-4e5a-9fa1-89a9e18e087b', 63),
@@ -237,7 +237,35 @@ def swap_name_not(n):
     p = n.find(', ')
     return n[:p]+n[p+1:] if p>0 else None
     
-def fetch_faculty():
+def fetch_faculty(debug):
+    url = 'https://www.aalto.fi/en/department-of-computer-science/contact-us'
+    print(f'Scraping names of Aalto CS faculty members from {url}')
+    response = requests.request('GET', url)
+    if response.status_code!=200:
+        return None
+    html = response.text
+    print(html, file=open('faculty.html', 'w'))
+    l = []
+    for k, v in alias.items():
+        l.append(v)
+    restree = lxml_html.fromstring(hack_html(html))
+    tree    = lxml_etree.ElementTree(restree)
+    if debug:
+        print(tree)
+    #for td in restree.xpath("//div[@class='aalto-table-wrapper']/table/tbody/tr/td[1]"):
+    for td in restree.xpath("//div[@class='aalto-table-wrapper']/table/tbody"):
+        if debug:
+            print(td)
+        if td.text:
+            n = td.text.strip()
+        else: # <a>
+            n = td.getchildren()[0].text.strip()
+        #print(td, n)
+        if n!="Firstname Lastname" and n not in l:
+            l.append(n)
+    return l
+
+def fetch_faculty_old2(debug):
     url = 'https://www.aalto.fi/en/department-of-computer-science/contact-us'
     print(f'Scraping names of Aalto CS faculty members from {url}')
     response = requests.request('GET', url)
@@ -251,7 +279,8 @@ def fetch_faculty():
     restree = lxml_html.fromstring(hack_html(html))
     tree    = lxml_etree.ElementTree(restree)
     for td in restree.xpath("//div[@class='aalto-table-wrapper']/table/tbody/tr/td[1]"):
-        #print(td)
+        if debug:
+            print(td)
         if td.text:
             n = td.text.strip()
         else: # <a>
@@ -261,7 +290,7 @@ def fetch_faculty():
             l.append(n)
     return l
 
-def fetch_faculty_old():
+def fetch_faculty_old1():
     url = 'https://www.aalto.fi/en/department-of-computer-science/faculty-members'
     print(f'Scraping names of Aalto CS faculty members from {url}')
     response = requests.request('GET', url)
@@ -932,12 +961,29 @@ def show_student(r, sin):
             m = ', '.join(m)
             print(f'Thesis by author "{sin}" #{c}: => {m}')
             pprint.pp(i)
+
+def dump_alias_txt(f):
+    l = []
+    z = set()
+    for k,v in alias.items():
+        if v not in z:
+            if k!=v:
+                print(f'[{k}] : [{v}]')
+                l.append(f'{k} : {v}')
+                z.add(v)
+            else:
+                print(f'[{k}]')
+                l.append(k)
+            
+    with open(f, 'w') as fp:
+        for i in l:
+            print(i, file=fp)
             
 # -----------------------------------------------------------------------------
 
 if __name__=="__main__":
     parser = argparse.ArgumentParser(description='Aalto CS Dept M.Sc. Thesis listing '
-                                     +'per supervisor in 2021-24',
+                                     +'per supervisor in 2021-25',
                                      epilog='See also alias.example.txt')
     parser.add_argument('-b', '--bsc', action='store_true',
                         help='show BSc theses instead of MSc')
@@ -1045,20 +1091,29 @@ if __name__=="__main__":
         if args.debug:
             print(f'Adding alias [{ali}]->[{can}]')
         alias[ali] = can
+    
 
     if args.aliasdata=='load':
         for i, j in json.loads(open('aliases.json').read()).items():
             alias[i] = j
 
+    if args.aliasdata=='dump':
+        dump_alias_txt('alias-dump-0.txt')
+        print('Dumped to alias-dump-0.txt')
+        
     # print(f'Aliases: {alias}')
 
-    people = fetch_faculty()
+    people = fetch_faculty(args.debug)
     #print(people)
 
     for p in people:
         theses[p] = []
         alias[p]  = p
 
+    if args.aliasdata=='dump':
+        dump_alias_txt('alias-dump-1.txt')
+        print('Dumped to alias-dump-1.txt')
+        
     if args.google:
         fetch_google_data(args.debug)
         exit(0)
@@ -1103,7 +1158,8 @@ if __name__=="__main__":
 
     if args.aliasdata=='dump':
         open('aliases.json', 'w').write(json.dumps(alias))
-        print('Dumped to alias.json')
+        dump_alias_txt('alias-dump-2.txt')
+        print('Dumped to alias-dump-2.txt and alias.json')
 
     #find_majors()
 
