@@ -221,7 +221,12 @@ def html_to_dict(html, debug = False):
             break
         
     # print(rec)
-    
+    if debug:
+        ff = rec['author'].replace(' ', '_').replace(',', '')+'.json'
+        with open(ff, 'w') as f:
+            print(json.dumps(rec, indent=4), file=f)
+            print(f'Dumped in {ff}')
+
     return rec
 
 def html_to_links(html):
