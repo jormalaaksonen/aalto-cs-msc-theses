@@ -148,52 +148,57 @@ def html_to_dict(html, debug = False):
     if 'issued' not in rec:
         rec['issued'] = 'unknown'        
 
-    for div in restree.xpath("//div[@_ngcontent-sc160='' and @class='simple-view-element']"):
-        # print(div)
-        l1 = div.xpath('h5')
-        l2 = div.xpath('div/span')
-        if debug and len(l1):
-            print(l1[0].text, len(l2))
-        if len(l1)==1 and len(l2)>0:
+    for xp1, xp2 in [['_ngcontent-sc161', 'h2'], ['_ngcontent-sc160', 'h5']]:
+        for div in restree.xpath(f"//div[@{xp1}='' and @class='simple-view-element']"):
             if debug:
-                print(l1[0].text, l2[0].text)
-            k = l1[0].text
-            v = l2[0].text
-            w = []
-            for i in l2:
-                if i.text != ', ':
-                    w.append(i.text)
-            if debug and len(w):
-                print(l1[0].text, w)
+                print(div)
+            l1 = div.xpath(xp2)
+            l2 = div.xpath('div/span')
+            if debug and len(l1):
+                print(l1[0].text, len(l2))
+            if len(l1)==1 and len(l2)>0:
+                if debug:
+                    print(l1[0].text, l2[0].text)
+                k = l1[0].text
+                v = l2[0].text
+                w = []
+                for i in l2:
+                    if i.text != ', ':
+                        w.append(i.text)
+                if debug and len(w):
+                    print(l1[0].text, w)
 
-            if k=='Major/Subject' or k=='Oppiaine':
-                rec['major'] = v
-            if k=='Mcode':
-                rec['major_code'] = v
-            if k=='Degree programme' or k=='Koulutusohjelma':
-                rec['degree_programme'] = v
-            if k=='Language' or k=='Kieli':
-                rec['language'] = v
-            if k=='Pages' or k=='Sivut':
-                rec['pages'] = v
-            if k=='Keywords' or k=='Avainsanat':
-                rec['keywords'] = w
+                if k=='Major/Subject' or k=='Oppiaine':
+                    rec['major'] = v
+                if k=='Mcode':
+                    rec['major_code'] = v
+                if k=='Degree programme' or k=='Koulutusohjelma':
+                    rec['degree_programme'] = v
+                if k=='Language' or k=='Kieli':
+                    rec['language'] = v
+                if k=='Pages' or k=='Sivut':
+                    rec['pages'] = v
+                if k=='Keywords' or k=='Avainsanat':
+                    rec['keywords'] = w
 
     l = restree.xpath("//ds-aalto-item-supervisor")
     assert len(l)==1, f'failed with supervisor: <{html2}>'
-    m = l[0].xpath('div/h5')
-    if len(m)>0:
-        v = m[0].tail
-    else:
-        v = "unknown"
+    v = "unknown"
+    for xp in ('div/h2', 'div/h5'):
+        m = l[0].xpath(xp)
+        if len(m)>0:
+            v = m[0].tail
+            break
     rec['supervisor'] = v.strip()
                 
     l = restree.xpath("//ds-aalto-item-advisor")
     assert len(l)==1, 'failed with advisor'
-    m = l[0].xpath('div/h5')
-    if len(m)==1:
-        v = m[0].tail
-        rec['advisor'] = v.strip()
+    for xp in ('div/h2', 'div/h5'):
+        m = l[0].xpath(xp)
+        if len(m)==1:
+            v = m[0].tail
+            rec['advisor'] = v.strip()
+            break
 
     abstxt = []
     l = restree.xpath("//ds-aalto-item-abstract")
@@ -206,12 +211,15 @@ def html_to_dict(html, debug = False):
     if abstxt:
         rec['abstract'] = ' | '.join(abstxt)    
 
-    l = restree.xpath("//a[@_ngcontent-sc450='']")
-    # assert len(l)<=1, 'failed with files'
-    rec['available'] = len(l)>0
-    if len(l):
-        #print(l[0].attrib['href'])
-        rec['url_pdf'] = f'https://aaltodoc.aalto.fi{l[0].attrib["href"]}'
+    for xp in ('_ngcontent-sc472', '_ngcontent-sc450'):
+        l = restree.xpath(f"//a[@{xp}='']")
+        # assert len(l)<=1, 'failed with files'
+        rec['available'] = len(l)>0
+        if len(l):
+            #print(l[0].attrib['href'])
+            rec['url_pdf'] = f'https://aaltodoc.aalto.fi{l[0].attrib["href"]}'
+            break
+        
     # print(rec)
     
     return rec
@@ -1050,7 +1058,7 @@ if __name__=="__main__":
         
     if args.parse:
         s = open(args.parse).read()
-        d = html_to_dict(s, True)
+        d = html_to_dict(s, args.debug)
         print(d)
         exit(0)
 
