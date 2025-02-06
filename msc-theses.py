@@ -459,7 +459,7 @@ def fetch_theses(max_pages, dump_raw, debug):
                     break
                 
                 if len(ll)==0:
-                    print(i, url, 'failed with no links...', 'retrying' if n<_n_try else 'skipping')
+                    print(i, url, 'failed with no links...', 'retrying' if n<n_try else 'skipping')
 
             if len(ll)<1:
                 continue
