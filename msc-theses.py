@@ -14,16 +14,16 @@ from lxml import etree as lxml_etree
 years = [ '2021', '2022', '2023', '2024', '2025' ]
 major = None
 
-school_info_bsc = [ ('SCI',  'BSc', '045c30ab-bee2-4e5a-9fa1-89a9e18e087b', 63),
-                    ('ELEC', 'BSc', '310a65a5-b8ba-44dc-9b26-da36cc4414d8', 48) ]
+school_info_bsc = [ ('SCI',  'BSc', '045c30ab-bee2-4e5a-9fa1-89a9e18e087b', 70),
+                    ('ELEC', 'BSc', '310a65a5-b8ba-44dc-9b26-da36cc4414d8', 51) ]
 
-school_info_msc = [ ('SCI',  'MSc', 'af72e803-f468-4c81-802c-7b8ff8602294', 87),
-                    ('ELEC', 'MSc', '9785ec69-7098-4c4a-88d8-32422966cd06', 46),
-                    ('ENG',  'MSc', 'fa8d40ed-d19a-4768-bd06-60b5d533195c', 67),
-                    ('ARTS', 'MSc', '81ea0a41-6f6f-4cad-98a6-6e09bd6b8068', 72) ]
+school_info_msc = [ ('SCI',  'MSc', 'af72e803-f468-4c81-802c-7b8ff8602294', 95),
+                    ('ELEC', 'MSc', '9785ec69-7098-4c4a-88d8-32422966cd06', 50),
+                    ('ENG',  'MSc', 'fa8d40ed-d19a-4768-bd06-60b5d533195c', 73),
+                    ('ARTS', 'MSc', '81ea0a41-6f6f-4cad-98a6-6e09bd6b8068', 78) ]
 
-school_info_dsc = [ ('SCI',  'DSc', 'c019eaac-587a-4f4b-af66-fef325a15a25', 13),
-                    ('ELEC', 'DSc', '901639ca-22f7-4fbb-86dd-ec22d2746053', 10) ]
+school_info_dsc = [ ('SCI',  'DSc', 'c019eaac-587a-4f4b-af66-fef325a15a25', 14),
+                    ('ELEC', 'DSc', '901639ca-22f7-4fbb-86dd-ec22d2746053', 11) ]
 
 school_info = []
 
@@ -429,6 +429,7 @@ def fetch_one_thesis(s, l, li, ln, url_base, dump_raw, debug):
         return ({}, True)
                                 
 def fetch_theses(max_pages, dump_raw, debug):
+    n_try = 10
     rec = []
     for s in school_info:
         print(f'Scraping {s[0]} school {s[1]} theses will continue until cp.page={s[3]} or even longer...')
@@ -439,20 +440,30 @@ def fetch_theses(max_pages, dump_raw, debug):
             url = f'{url_base}/collections/{s[2]}'
             if i>0:
                 url = f'{urlred}?cp.page={i+1}'
-            print(f'  fetching {s[0]} {s[1]} {url}', flush=True)
-            response = request_with_loop_exclude_5xx(url, 10)
-            if response.status_code!=200:
-                print(i, url, 'error', response.status_code)
-                continue
+                
+            n = 0
+            while n<n_try:
+                n += 1
+                
+                print(f'  fetching {s[0]} {s[1]} {url}', flush=True)
+                response = request_with_loop_exclude_5xx(url, 10)
+                if response.status_code!=200:
+                    print(i, url, 'error', response.status_code)
+                    continue
 
-            # open('index-page.html', 'w').write(response.text)
-            if urlred is None:
-                urlred = response.url
-            ll = html_to_links(response.text)
-            if len(ll)==0:
-                print(i, url, 'failed with no links')
-                continue
+                # open('index-page.html', 'w').write(response.text)
+                if urlred is None:
+                    urlred = response.url
+                ll = html_to_links(response.text)
+                if len(ll):
+                    break
+                
+                if len(ll)==0:
+                    print(i, url, 'failed with no links...', 'retrying' if n<_n_try else 'skipping')
 
+            if len(ll)<1:
+                continue
+            
             do_break = True
             for li, l in enumerate(ll):
                 d, b = fetch_one_thesis(s, l, li, len(ll), url_base, dump_raw, debug)
