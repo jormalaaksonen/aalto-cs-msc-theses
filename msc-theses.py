@@ -17,9 +17,9 @@ major = None
 school_info_bsc = [ ('SCI',  'BSc', '045c30ab-bee2-4e5a-9fa1-89a9e18e087b', 70),
                     ('ELEC', 'BSc', '310a65a5-b8ba-44dc-9b26-da36cc4414d8', 51) ]
 
-school_info_msc = [ ('SCI',  'MSc', 'af72e803-f468-4c81-802c-7b8ff8602294', 95),
-                    ('ELEC', 'MSc', '9785ec69-7098-4c4a-88d8-32422966cd06', 50),
-                    ('ENG',  'MSc', 'fa8d40ed-d19a-4768-bd06-60b5d533195c', 73),
+school_info_msc = [ ('SCI',  'MSc', 'af72e803-f468-4c81-802c-7b8ff8602294', 98),
+                    ('ELEC', 'MSc', '9785ec69-7098-4c4a-88d8-32422966cd06', 51),
+                    ('ENG',  'MSc', 'fa8d40ed-d19a-4768-bd06-60b5d533195c', 74),
                     ('ARTS', 'MSc', '81ea0a41-6f6f-4cad-98a6-6e09bd6b8068', 78) ]
 
 school_info_dsc = [ ('SCI',  'DSc', 'c019eaac-587a-4f4b-af66-fef325a15a25', 14),
@@ -65,23 +65,39 @@ major_names = { # BSc
                 'SCI3046':  'Game design and development',
                 'SCI3047':  'Information networks',
                 'SCI3053':  'Applied mathematics',
+                'SCI3054':  'Mathematics',
+                'SCI3055':  'Systems and Operations Research',
                 'SCI3059':  'Biomedical engineering',
                 'SCI3060':  'Complex systems',
-                'SCI3062':  'International design business management',
+                'SCI3061':  'Human Neuroscience and Technology (old?)',
+                'SCI3062':  'International design business management (old?)',
                 'SCI3068':  'Computer science (minor)',
                 'SCI3070':  'Macadamia (minor)',
+                'SCI3073':  'Analytics and Data Science (minor)',
                 'SCI3084':  'Security',
                 'SCI3085':  'Security and cloud computing (minor)',
                 'SCI3092':  'Bioinformatics and digital health',
                 'SCI3097':  'Human-computer interaction',
+                'SCI3099':  'Business and Organisational Design',
                 'SCI3113':  'SECCLO',
 
-                'SCI3020':  'EIT ICT Human-computer intearction and design',
+                'SCI3020':  'EIT ICT Human-computer interaction and design',
                 'SCI3081':  'EIT ICT Cloud computing and services',
                 'SCI3095':  'EIT ICT Data science',
                 'SCI3102':  'EIT ICT Visual computing',
                 'SCI3115':  'EIT ICT Data science',
 
+                'SCI3101':  'International Design Business Management',
+    
+                'SCI3160':  'Digital Ethics, Society and Policy',
+                'SCI3161':  'User, Data and Design',
+
+                'SCI3601':  'Human Neuroscience and Technology',
+                # '':  '',
+                # '':  '',
+                # '':  '',
+    
+                'ELEC211':  'Communications and Data Science',
                 'ELEC3025': 'Control, robotics and autonomous systems',
                 'ELEC3029': 'Communications engineering',
                 'ELEC3030': 'Acoustics and audio technology',
@@ -92,11 +108,16 @@ major_names = { # BSc
                 'ELEC3068': 'Speech and language technology'
               }
 
-# ??? Security and Cloud Computing
-# ??? Machine Learning, Data Science and Artificial Intelligenc
-# ??? Human-Computer Interaction and Design
-# ??? Software and Service Engineering
-# ??? Machine Learning, Data Science and Artificial Intelligence (sivuaine
+major_names_add = {
+    'SCI3043': ['Software and Service Engineering'],
+    'SCI3044': ['Machine Learning, Data Science and Artificial Intelligence'],
+    'SCI3046': ['Pelisuunnittelu ja pelinkehittäminen', 'Game Design and Production'],
+    'SCI3047': ['Software Engineering and Architectures'], # ???
+    'SCI3070': ['Machine Learning, Data Science and Artificial Intelligence (sivuaine)'],
+    'SCI3073': ['Analytics and Data Science'],
+    'SCI3113': ['Security and Cloud Computing'],
+    }
+
 # ??? Cloud and Network Infrastructures
 
 major_names_inv = {}
@@ -109,6 +130,11 @@ for k, v in major_names.items():
     assert v not in major_names_inv, \
         f'major_names_inv[] not unique "{v}" -> {major_names_inv[v]} vs {k}'
     major_names_inv[v] = k
+for k, v in major_names_add.items():
+    # print(f'{k} {v}')
+    for i in v:
+        # print(f'  {k} {i}')
+        major_names_inv[i.lower()] = k
 
 use_cache = True
 cache_dir = None
@@ -347,16 +373,19 @@ def request_with_loop_old(url, n):
 def solve_major_code(rec):
     if 'major_code' in rec:
         return rec['major_code']
-    
-    # if 'major' in rec:
-    #     mc = 'unsolvd'
-    #     m = rec['major'].lower()
-    #     if m in major_names_inv:
-    #         mc = major_names_inv[m]
-    #     print()
-    #     print(f'SOLVE MAJOR CODE {mc} {rec["major"]}')
-    #     return f'?{rec["major"]:.6}'
 
+    if 'major' in rec:
+        mc = 'unsolvd'
+        m = rec['major'].lower()
+        if m in major_names_inv:
+            mc = major_names_inv[m]
+        # print()
+        # print(f'SOLVE MAJOR CODE {mc} {rec["major"]}')
+        # return f'?{rec["major"]:.6}'
+        return mc
+        
+    # assert False, f'No major code, major="{rec['major']}"'
+    
     return 'unknown'
 
 
@@ -982,7 +1011,7 @@ def show_student(r, sin):
             m = match_record(i, ['supervisor', 'advisor'])
             m = [ f'{n} ({r})' for n, r in m.items() ]
             m = ', '.join(m)
-            print(f'Thesis by author "{sin}" #{c}: => {m}')
+            print(f'Thesis by author "{sin}" #{c}: => {m} major_code={solve_major_code(i)}')
             pprint.pp(i)
 
 def dump_alias_txt(f):
