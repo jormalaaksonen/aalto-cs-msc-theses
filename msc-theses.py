@@ -11,8 +11,9 @@ import pprint
 from lxml import html  as lxml_html
 from lxml import etree as lxml_etree
 
-years = [ '2021', '2022', '2023', '2024', '2025' ]
-major = None
+years   = [ '2021', '2022', '2023', '2024', '2025' ]
+schools = [ 'SCI', 'ELEC', 'ENG', 'ARTS']
+major   = None
 
 school_info_bsc = [ ('SCI',  'BSc', '045c30ab-bee2-4e5a-9fa1-89a9e18e087b', 70),
                     ('ELEC', 'BSc', '310a65a5-b8ba-44dc-9b26-da36cc4414d8', 51) ]
@@ -20,7 +21,9 @@ school_info_bsc = [ ('SCI',  'BSc', '045c30ab-bee2-4e5a-9fa1-89a9e18e087b', 70),
 school_info_msc = [ ('SCI',  'MSc', 'af72e803-f468-4c81-802c-7b8ff8602294', 98),
                     ('ELEC', 'MSc', '9785ec69-7098-4c4a-88d8-32422966cd06', 51),
                     ('ENG',  'MSc', 'fa8d40ed-d19a-4768-bd06-60b5d533195c', 74),
-                    ('ARTS', 'MSc', '81ea0a41-6f6f-4cad-98a6-6e09bd6b8068', 78) ]
+                    ('ARTS', 'MSc', '81ea0a41-6f6f-4cad-98a6-6e09bd6b8068', 78),
+                    ('CHEM', 'MSc', '2eef0435-e78a-4a1f-9120-69416dcf524d', 35),
+                    ('BIZ',  'MSc', 'a13914be-7bc8-41a1-82d5-86297b85739c', 42) ]
 
 school_info_dsc = [ ('SCI',  'DSc', 'c019eaac-587a-4f4b-af66-fef325a15a25', 14),
                     ('ELEC', 'DSc', '901639ca-22f7-4fbb-86dd-ec22d2746053', 11) ]
@@ -105,7 +108,10 @@ major_names = { # BSc
                 'ELEC3049': 'Signal processing and data science',
                 'ELEC3055': 'Autonomous systems',
                 'ELEC3060': 'Electronic and digital systems',
-                'ELEC3068': 'Speech and language technology'
+                'ELEC3068': 'Speech and language technology',
+
+                'CHEM210'  : 'Biological and Chemical Engineering', # ???
+                'CHEM3022' : 'Biotechnology'
               }
 
 major_names_add = {
@@ -452,7 +458,8 @@ def fetch_one_thesis(s, l, li, ln, url_base, dump_raw, debug):
 
     y  = d['issued'][:4]
     mc = solve_major_code(d)
-    if (y in years or 'all' in years) and (major is None or mc==major):
+    if (y in years or 'all' in years) and (s[0] in schools or 'all' in schools) \
+       and (major is None or mc==major):
         return (d, False)
     else:
         return ({}, True)
@@ -461,6 +468,8 @@ def fetch_theses(max_pages, dump_raw, debug):
     n_try = 10
     rec = []
     for s in school_info:
+        if 'all' not in schools and s[0] not in schools:
+            continue
         print(f'Scraping {s[0]} school {s[1]} theses will continue until cp.page={s[3]} or even longer...')
         urlred = None
         for i in range(max_pages):
@@ -510,8 +519,10 @@ def fetch_theses_cache(debug):
         #print(i)
         d  = json.loads(open(i).read())
         y  = d.get('issued', '0000')[:4]
+        ss = d.get('school', None)
         mc = solve_major_code(d)
-        if (y in years or 'all' in years) and (major is None or mc==major):
+        if (y in years or 'all' in years) and (ss in schools or 'all' in schools) \
+           and (major is None or mc==major):
             r.append(d)
     rec = []
     for s in school_info:
@@ -1047,6 +1058,8 @@ if __name__=="__main__":
                         help='fast version: no downloads, just read cached JSON files')
     parser.add_argument('-y', '--years', type=str,
                         help='select years (comma-separated or "all")')
+    parser.add_argument('-c', '--schools', type=str,
+                        help='select schools (comma-separated or "all")')
     parser.add_argument('-m', '--major', type=str,
                         help='select a specific major such as "SCI3044"')
     parser.add_argument('-d', '--detail', action='store_true',
@@ -1119,6 +1132,9 @@ if __name__=="__main__":
     if args.years:
         years = args.years.split(',')
 
+    if args.schools:
+        schools = args.schools.split(',')
+
     if args.major:
         major = args.major
 
@@ -1186,7 +1202,7 @@ if __name__=="__main__":
         rec = []
         for i in rec_all:
             # does not check args.major
-            if i['issued'][:4] in years or 'all' in years:
+            if i['issued'][:4] in years or 'all' in years: # major? school?
                 rec.append(i)
 
     #print(rec)
