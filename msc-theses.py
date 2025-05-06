@@ -571,15 +571,17 @@ def name_or_alias(n):
     debug = False
 
     if debug:
-        print(f'{n} xxxxx')
+        print(f'name_or_alias({n})')
     if n is None:
         return n
     
     if n in alias:
+        if debug:
+            print(f'  {n} in alias: {alias[n]}')
         return alias[n]
     if n in no_hit:
         if debug:
-            print(f'{n} no_hit')
+            print(f'  {n} in no_hit: None')
         return None
     nn = n.split()
     for i in theses.keys():
@@ -623,6 +625,7 @@ def match_record(r, roles):
                 #print(f'COMMA ADDED [{pp}]=>[{p}]')
         n = swap_name(p)
         a = name_or_alias(n)
+        # print(p, n, a)
         if a is not None:
             fl.append((a, ppr))
         else: ## odd cases "firstname, familyname"
@@ -644,10 +647,11 @@ def match_record(r, roles):
         if p>0:
             mc = mc[:p]
             
-        assert len(mc)<9, f'too long major_code <{mc}>'
+        # assert len(mc)<9, f'too long major_code <{mc}>'
         av = 'AVAILABLE' if r['available'] else 'NOT available'
         e = (swap_name(r['author']), r['title'], r['issued'], r['school'], mc, \
-             av, ', '.join(r['keywords']), r.get('abstract', '*** no abstract ***'), \
+             av, ', '.join(r.get('keywords', [])), \
+             r.get('abstract', '*** no abstract ***'), \
              role)
         theses[n].append(e)
         #print('FOUND', n, ':', *e)
@@ -917,7 +921,7 @@ def fetch_google_data(debug):
                     except:
                         print(f'Appending "{gvalstr}" in {google_data_file} failed')
 
-def show_theses(detail, keywords, role):
+def show_theses(detail, keywords, role, totrec):
     counts = []
     for p in people:
         m = ' '.join(sorted(majors[p])) if p in majors else ''
@@ -925,15 +929,29 @@ def show_theses(detail, keywords, role):
     counts.sort(reverse=True)
     #print(counts)
     sum = 0
-    for i in counts:
+    prev_n  = None
+    prev_xi = None
+    
+    for xi, i in enumerate(counts):
         group = i[2] # currently empty
         _,_,_, cites, hidx, _,_,_,_ = google_data(i[1]) 
         if cites:
             scholar = f'h-idx: {hidx}, cites: {cites}'
         else:
             scholar = ''
-        
-        print(f'{i[0]:3d} {i[1]} ({scholar})')
+
+        extra = ''
+        if totrec:
+            xxi = xi
+            if i[0]==prev_n:
+                xxi = prev_xi
+            else:
+                prev_n  = i[0]
+                prev_xi = xi
+            extra = f'#{xxi+1}'
+            
+            
+        print(f'{extra}{i[0]:4d} {i[1]} ({scholar})')
         sum += i[0]
         if detail:
             for j in theses[i[1]]:
@@ -1087,6 +1105,8 @@ if __name__=="__main__":
                         help='dump full information on one student and quit')
     parser.add_argument('--google', action='store_true',
                         help='fetch Google Scholar data')
+    parser.add_argument('--total_recall', action='store_true',
+                        help='with --fast, processes all supervisors, not only CS department')
     args = parser.parse_args()
 
     #print(edit_dist('abc', 'axbc'))
@@ -1172,7 +1192,7 @@ if __name__=="__main__":
     # print(f'Aliases: {alias}')
 
     people = fetch_faculty(args.debug)
-    #print(people)
+    # print(people)
 
     for p in people:
         theses[p] = []
@@ -1191,6 +1211,19 @@ if __name__=="__main__":
             rec = fetch_theses(args.max, args.raw, args.debug)
         else:
             rec = fetch_theses_cache(args.debug)
+            if args.total_recall:
+                for p in rec:
+                    ss = p.get('supervisor', None)
+                    if ss and ss!='unknown':
+                        s = ss.split(', ')
+                        # assert len(s)==2, f'Could not split "{ss}" {p}'
+                        if len(s)!=2:
+                            continue
+                        s = f'{s[1]} {s[0]}'
+                        if s not in people:
+                            people.append(s)
+                        theses[s] = []
+                        alias[s]  = s
             
     if args.theses=='dump':
         open('theses.json', 'w').write(json.dumps(rec))
@@ -1231,7 +1264,7 @@ if __name__=="__main__":
 
     #find_majors()
 
-    show_theses(args.detail, args.keywords, args.dsc or args.roles)
+    show_theses(args.detail, args.keywords, args.dsc or args.roles, args.total_recall)
 
     split_theses()
 
