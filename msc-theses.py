@@ -405,6 +405,7 @@ def fetch_one_thesis(s, l, li, ln, url_base, dump_raw, debug):
     text  = None
     d = None
     jfilex = None
+    fetched = False
     #print(l, urlx, cfile)
     if use_cache and os.path.isfile(cfile) and os.path.getsize(cfile):
         if os.path.isfile(jfile) and os.path.getsize(jfile):
@@ -419,6 +420,7 @@ def fetch_one_thesis(s, l, li, ln, url_base, dump_raw, debug):
             if debug:
                 print(f'    read cached     {cfile} -> {urlx}')
     else:
+        fetched  = True
         response = request_with_loop_exclude_5xx(urlx, 10)
         if response.status_code!=200:
             print(i, urlx, l, 'error', response.status_code)
@@ -460,11 +462,11 @@ def fetch_one_thesis(s, l, li, ln, url_base, dump_raw, debug):
     mc = solve_major_code(d)
     if (y in years or 'all' in years) and (s[0] in schools or 'all' in schools) \
        and (major is None or mc==major):
-        return (d, False)
+        return (d, False, fetched)
     else:
-        return ({}, True)
+        return ({}, True, fetched)
                                 
-def fetch_theses(max_pages, dump_raw, debug):
+def fetch_theses(max_pages, dump_raw, update, debug):
     n_try = 10
     rec = []
     for s in school_info:
@@ -502,13 +504,18 @@ def fetch_theses(max_pages, dump_raw, debug):
             if len(ll)<1:
                 continue
             
-            do_break = True
+            do_break  = True
+            n_fetched = 0
             for li, l in enumerate(ll):
-                d, b = fetch_one_thesis(s, l, li, len(ll), url_base, dump_raw, debug)
+                d, b, f = fetch_one_thesis(s, l, li, len(ll), url_base, dump_raw, debug)
                 do_break = do_break and b
+                n_fetched += f
                 if d:
                     rec.append(d)
-                    
+
+            if update and n_fetched==0:
+                print('  skipping the rest...')
+                do_break = True
             if do_break:
                 break
     return rec
@@ -1074,6 +1081,8 @@ if __name__=="__main__":
                         help='specify comma-separated roles "advisor" and/or "supervisor"')
     parser.add_argument('-f', '--fast', action='store_true',
                         help='fast version: no downloads, just read cached JSON files')
+    parser.add_argument('-u', '--update', action='store_true',
+                        help='download only newly added theses in the cache')
     parser.add_argument('-y', '--years', type=str,
                         help='select years (comma-separated or "all")')
     parser.add_argument('-c', '--schools', type=str,
@@ -1208,7 +1217,7 @@ if __name__=="__main__":
     
     if (args.theses is None and args.supervisors!='load') or args.theses=='dump':
         if not args.fast:
-            rec = fetch_theses(args.max, args.raw, args.debug)
+            rec = fetch_theses(args.max, args.raw, args.update, args.debug)
         else:
             rec = fetch_theses_cache(args.debug)
             if args.total_recall:
