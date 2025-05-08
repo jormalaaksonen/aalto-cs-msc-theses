@@ -1219,11 +1219,15 @@ if __name__=="__main__":
                         # assert len(s)==2, f'Could not split "{ss}" {p}'
                         if len(s)!=2:
                             continue
-                        s = f'{s[1]} {s[0]}'
-                        if s not in people:
-                            people.append(s)
-                        theses[s] = []
-                        alias[s]  = s
+                        sx = f'{s[1]} {s[0]}'
+                        s  = name_or_alias(sx)
+                        # print(f'{ss} - {sx} - {s}')
+                        if s is not None:
+                            alias[sx] = s
+                        else:
+                            people.append(sx)
+                            theses[sx] = []
+                            alias[sx]  = sx
             
     if args.theses=='dump':
         open('theses.json', 'w').write(json.dumps(rec))
