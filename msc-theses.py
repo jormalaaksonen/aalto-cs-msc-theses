@@ -135,9 +135,10 @@ major_names_add = {
     'SCI3044':  ['Machine Learning, Data Science and Artificial Intelligence'],
     'SCI3046':  ['Pelisuunnittelu ja pelinkehittäminen', 'Game Design and Production'],
     'SCI3047':  ['Software Engineering and Architectures'], # ???
-    'SCI3054':  ['Mathematics\xa0'],
+    'SCI3054':  ['Mathematics\xa0'], # this should be codified
     'SCI3070':  ['Machine Learning, Data Science and Artificial Intelligence (sivuaine)'],
     'SCI3073':  ['Analytics and Data Science'],
+    'SCI3108':  ['Tuotantotalous'], # ???
     'SCI3113':  ['Security and Cloud Computing'],
     'SCI3116':  ['Product and Innovation Management'],
     'ELEC3039': ['Avaruustiede ja -teknologia'],
