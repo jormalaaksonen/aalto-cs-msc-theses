@@ -91,6 +91,20 @@ major_names = { # BSc
                 'SCI3115':  'EIT ICT Data science',
 
                 'SCI3101':  'International Design Business Management',
+
+                'SCI3106':  'Advanced Energy Technologies',
+                'SCI3107':  'Materials Physics and Quantum Technology',
+                'SCI3083':  'Advanced Materials for Innovation and Sustainability',
+                'SCI3056':  'Engineering Physics',
+    
+                'SCI3108':  'Operations Management',
+                'SCI3094':  'Organisation Design and Leadership',
+                'SCI3116':  'Product Innovation and Management',
+                'SCI3109':  'Strategy',
+                'SCI3051':  'Strategy (old?)',
+                'SCI3050':  'Strategy and Venturing',
+                'SCI3086':  'Financial Engineering',
+                'SCI3048':  'Leadership and Knowledge Management',
     
                 'SCI3160':  'Digital Ethics, Society and Policy',
                 'SCI3161':  'User, Data and Design',
@@ -110,19 +124,24 @@ major_names = { # BSc
                 'ELEC3060': 'Electronic and digital systems',
                 'ELEC3068': 'Speech and language technology',
 
+                'ELEC3039': 'Space Science and Technology',
+    
                 'CHEM210'  : 'Biological and Chemical Engineering', # ???
                 'CHEM3022' : 'Biotechnology'
               }
 
 major_names_add = {
-    'SCI3043': ['Software and Service Engineering'],
-    'SCI3044': ['Machine Learning, Data Science and Artificial Intelligence'],
-    'SCI3046': ['Pelisuunnittelu ja pelinkehittäminen', 'Game Design and Production'],
-    'SCI3047': ['Software Engineering and Architectures'], # ???
-    'SCI3070': ['Machine Learning, Data Science and Artificial Intelligence (sivuaine)'],
-    'SCI3073': ['Analytics and Data Science'],
-    'SCI3113': ['Security and Cloud Computing'],
-    }
+    'SCI3043':  ['Software and Service Engineering'],
+    'SCI3044':  ['Machine Learning, Data Science and Artificial Intelligence'],
+    'SCI3046':  ['Pelisuunnittelu ja pelinkehittäminen', 'Game Design and Production'],
+    'SCI3047':  ['Software Engineering and Architectures'], # ???
+    'SCI3054':  ['Mathematics\xa0'],
+    'SCI3070':  ['Machine Learning, Data Science and Artificial Intelligence (sivuaine)'],
+    'SCI3073':  ['Analytics and Data Science'],
+    'SCI3113':  ['Security and Cloud Computing'],
+    'SCI3116':  ['Product and Innovation Management'],
+    'ELEC3039': ['Avaruustiede ja -teknologia'],
+}
 
 # ??? Cloud and Network Infrastructures
 
@@ -376,7 +395,7 @@ def request_with_loop_old(url, n):
         time.sleep(i)
     return response
 
-def solve_major_code(rec):
+def solve_major_code(rec, debug = False):
     if 'major_code' in rec:
         return rec['major_code']
 
@@ -385,8 +404,8 @@ def solve_major_code(rec):
         m = rec['major'].lower()
         if m in major_names_inv:
             mc = major_names_inv[m]
-        # print()
-        # print(f'SOLVE MAJOR CODE {mc} {rec["major"]}')
+        if debug:
+            print(f'SOLVE MAJOR CODE {mc} {rec["major"]}')
         # return f'?{rec["major"]:.6}'
         return mc
         
@@ -527,7 +546,7 @@ def fetch_theses_cache(debug):
         d  = json.loads(open(i).read())
         y  = d.get('issued', '0000')[:4]
         ss = d.get('school', None)
-        mc = solve_major_code(d)
+        mc = solve_major_code(d, debug)
         if (y in years or 'all' in years) and (ss in schools or 'all' in schools) \
            and (major is None or mc==major):
             r.append(d)
@@ -614,12 +633,13 @@ def name_or_alias(n):
     no_hit.add(n)
     return None
     
-def match_record(r, roles):
+def match_record(r, roles, debug = False):
     rr = []
     for i in roles:
         if r.get(i, '')!='':
             rr.append((r[i], i))
-    # print(rr)
+    if debug:
+        print(rr)
     fl = []
     for pp, ppr in rr:
         if pp=='unknown':
@@ -629,17 +649,20 @@ def match_record(r, roles):
             px = p.find(' ')
             if px>0:
                 p = p[:px]+','+p[px:]
-                #print(f'COMMA ADDED [{pp}]=>[{p}]')
+                if debug:
+                    print(f'COMMA ADDED [{pp}]=>[{p}]')
         n = swap_name(p)
         a = name_or_alias(n)
-        # print(p, n, a)
+        if debug:
+            print(p, n, a)
         if a is not None:
             fl.append((a, ppr))
         else: ## odd cases "firstname, familyname"
             n = swap_name_not(p)
-            # print(f'p="{p}" n="{n}"')
-            # if n is None:
-            #     print(r)
+            if debug:
+                print(f'p="{p}" n="{n}"')
+            if debug and n is None:
+                print(r)
             a = name_or_alias(n)
             if a is not None:
                 fl.append((a, ppr))
@@ -661,7 +684,8 @@ def match_record(r, roles):
              r.get('abstract', '*** no abstract ***'), \
              role)
         theses[n].append(e)
-        #print('FOUND', n, ':', *e)
+        if debug:
+            print('FOUND', n, ':', *e)
         if mc not in per_major_code:
             per_major_code[mc] = []
         per_major_code[mc].append(e)
@@ -928,7 +952,7 @@ def fetch_google_data(debug):
                     except:
                         print(f'Appending "{gvalstr}" in {google_data_file} failed')
 
-def show_theses(detail, keywords, role, totrec):
+def show_theses(detail, keywords, role, ntot, totrec):
     counts = []
     for p in people:
         m = ' '.join(sorted(majors[p])) if p in majors else ''
@@ -972,7 +996,7 @@ def show_theses(detail, keywords, role, totrec):
                 if keywords:
                     print(f'. {j[5]}. {j[6]}. {j[7]}', end='')
                 print()
-    print(f'{sum:3d} TOTAL')
+    print(f'{sum:3d} TOTAL (from {ntot} theses)')
 
 split = {}
 per_major_code = {}
@@ -1000,7 +1024,7 @@ def split_theses():
             else:
                 split[m]['theses'].append((i, n/e, 1/e))
 
-def show_summary():
+def show_summary(ntot):
     # print(per_major_code)
     mcc = []
     for i, j in per_major_code.items():
@@ -1010,7 +1034,7 @@ def show_summary():
     for i in mcc:
         print(f'{i[0]:4} {i[1]:8} {major_names.get(i[1], "")}')
         sum += i[0]
-    print(f'{sum:4} TOTAL')
+    print(f'{sum:4} TOTAL (from {ntot} theses)')
     return
 
     #print(split)
@@ -1223,6 +1247,8 @@ if __name__=="__main__":
             if args.total_recall:
                 for p in rec:
                     ss = p.get('supervisor', None)
+                    if not ss or ss=='unknown':
+                        ss = p.get('advisor', None)
                     if ss and ss!='unknown':
                         s = ss.split(', ')
                         # assert len(s)==2, f'Could not split "{ss}" {p}'
@@ -1230,7 +1256,8 @@ if __name__=="__main__":
                             continue
                         sx = f'{s[1]} {s[0]}'
                         s  = name_or_alias(sx)
-                        # print(f'{ss} - {sx} - {s}')
+                        if args.debug:
+                            print(f'{ss} - {sx} - {s}')
                         if s is not None:
                             alias[sx] = s
                         else:
@@ -1258,9 +1285,9 @@ if __name__=="__main__":
         exit(0)
                 
     if args.supervisors!='load':
-        print('Matching {} records with {} faculty members'.format(len(rec), len(people)))
+        print(f'Matching {len(rec)} records with {len(people)} faculty members')
         for r in rec:
-            match_record(r, roles)
+            match_record(r, roles, args.debug)
 
     if args.supervisors=='dump':
         open('supervisors.json', 'w').write(json.dumps(theses))
@@ -1277,9 +1304,9 @@ if __name__=="__main__":
 
     #find_majors()
 
-    show_theses(args.detail, args.keywords, args.dsc or args.roles, args.total_recall)
+    show_theses(args.detail, args.keywords, args.dsc or args.roles, len(rec), args.total_recall)
 
     split_theses()
 
-    show_summary()
+    show_summary(len(rec))
 
