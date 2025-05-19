@@ -124,8 +124,20 @@ major_names = { # BSc
                 'ELEC3060': 'Electronic and digital systems',
                 'ELEC3068': 'Speech and language technology',
 
+                'ELEC3023': 'Translational Engineering',
+                'ELEC3024': 'Electrical Power and Energy Engineering',
+                'ELEC3036': 'Micro- and Nanoelectronic Circuit Design',
                 'ELEC3039': 'Space Science and Technology',
-    
+                'ELEC3041': 'Microelectronic Circuit Design', #  (minor)
+                'ELEC3045': 'Biosensing and Bioelectronics',
+                'ELEC3047': 'Space Robotics and Automation',
+                'ELEC3048': 'Energy Systems and Markets',
+                'ELEC3051': 'Microwave Engineering',
+                'ELEC3052': 'Photonics and Nanotechnology',
+                'ELEC3059': 'Cloud and Network Infrastructures',
+                'ELEC3064': 'Smart Systems Integrated Solutions',
+                # '': '',
+
                 'CHEM210'  : 'Biological and Chemical Engineering', # ???
                 'CHEM3022' : 'Biotechnology'
               }
