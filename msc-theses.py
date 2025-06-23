@@ -18,10 +18,10 @@ major   = None
 school_info_bsc = [ ('SCI',  'BSc', '045c30ab-bee2-4e5a-9fa1-89a9e18e087b',  70),
                     ('ELEC', 'BSc', '310a65a5-b8ba-44dc-9b26-da36cc4414d8',  51) ]
 
-school_info_msc = [ ('SCI',  'MSc', 'af72e803-f468-4c81-802c-7b8ff8602294',  98),
-                    ('ELEC', 'MSc', '9785ec69-7098-4c4a-88d8-32422966cd06',  51),
-                    ('ENG',  'MSc', 'fa8d40ed-d19a-4768-bd06-60b5d533195c',  74),
-                    ('ARTS', 'MSc', '81ea0a41-6f6f-4cad-98a6-6e09bd6b8068',  78),
+school_info_msc = [ ('SCI',  'MSc', 'af72e803-f468-4c81-802c-7b8ff8602294', 105),
+                    ('ELEC', 'MSc', '9785ec69-7098-4c4a-88d8-32422966cd06',  55),
+                    ('ENG',  'MSc', 'fa8d40ed-d19a-4768-bd06-60b5d533195c',  80),
+                    ('ARTS', 'MSc', '81ea0a41-6f6f-4cad-98a6-6e09bd6b8068',  86),
                     ('CHEM', 'MSc', '2eef0435-e78a-4a1f-9120-69416dcf524d',  35),
                     ('BIZ',  'MSc', 'a13914be-7bc8-41a1-82d5-86297b85739c', 111) ]
 
@@ -215,14 +215,16 @@ def html_to_dict(html, debug = False):
     for xp1, xp2 in [['_ngcontent-sc161', 'h2'], ['_ngcontent-sc160', 'h5']]:
         for div in restree.xpath(f"//div[@{xp1}='' and @class='simple-view-element']"):
             if debug:
-                print(div)
+                print('DIV', div, div.attrib)
             l1 = div.xpath(xp2)
             l2 = div.xpath('div/span')
+            if len(l2)==0:
+                l2 = div.xpath('div/a')
             if debug and len(l1):
-                print(l1[0].text, len(l2))
+                print('L1 ', l1[0].text, len(l1), len(l2))
             if len(l1)==1 and len(l2)>0:
                 if debug:
-                    print(l1[0].text, l2[0].text)
+                    print('KV ', l1[0].text, l2[0].text)
                 k = l1[0].text
                 v = l2[0].text
                 w = []
@@ -230,7 +232,7 @@ def html_to_dict(html, debug = False):
                     if i.text != ', ':
                         w.append(i.text)
                 if debug and len(w):
-                    print(l1[0].text, w)
+                    print('W  ', l1[0].text, w)
 
                 if k=='Major/Subject' or k=='Oppiaine':
                     rec['major'] = v
@@ -1183,7 +1185,9 @@ if __name__=="__main__":
     if args.parse:
         s = open(args.parse).read()
         d = html_to_dict(s, args.debug)
-        print(d)
+        # print(d)
+        pprint.pp(d)
+        print(f'  => major_code={solve_major_code(d)}')
         exit(0)
 
     if use_cache:
