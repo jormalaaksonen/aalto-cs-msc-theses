@@ -11,19 +11,19 @@ import pprint
 from lxml import html  as lxml_html
 from lxml import etree as lxml_etree
 
-years   = [ '2021', '2022', '2023', '2024', '2025' ]
-schools = [ 'SCI', 'ELEC', 'ENG', 'ARTS']
+years   = [ '2021', '2022', '2023', '2024', '2025', '2026' ]
+schools = [ 'SCI', 'ELEC', 'ENG', 'ARTS', 'CHEM', 'BIZ']
 major   = None
 
 school_info_bsc = [ ('SCI',  'BSc', '045c30ab-bee2-4e5a-9fa1-89a9e18e087b',  70),
                     ('ELEC', 'BSc', '310a65a5-b8ba-44dc-9b26-da36cc4414d8',  51) ]
 
-school_info_msc = [ ('SCI',  'MSc', 'af72e803-f468-4c81-802c-7b8ff8602294', 105),
-                    ('ELEC', 'MSc', '9785ec69-7098-4c4a-88d8-32422966cd06',  55),
-                    ('ENG',  'MSc', 'fa8d40ed-d19a-4768-bd06-60b5d533195c',  80),
-                    ('ARTS', 'MSc', '81ea0a41-6f6f-4cad-98a6-6e09bd6b8068',  86),
-                    ('CHEM', 'MSc', '2eef0435-e78a-4a1f-9120-69416dcf524d',  35),
-                    ('BIZ',  'MSc', 'a13914be-7bc8-41a1-82d5-86297b85739c', 111) ]
+school_info_msc = [ ('SCI',  'MSc', 'af72e803-f468-4c81-802c-7b8ff8602294', 128),
+                    ('ELEC', 'MSc', '9785ec69-7098-4c4a-88d8-32422966cd06',  70),
+                    ('ENG',  'MSc', 'fa8d40ed-d19a-4768-bd06-60b5d533195c',  98),
+                    ('ARTS', 'MSc', '81ea0a41-6f6f-4cad-98a6-6e09bd6b8068', 101),
+                    ('CHEM', 'MSc', '2eef0435-e78a-4a1f-9120-69416dcf524d',  47),
+                    ('BIZ',  'MSc', 'a13914be-7bc8-41a1-82d5-86297b85739c', 142) ]
 
 school_info_dsc = [ ('SCI',  'DSc', 'c019eaac-587a-4f4b-af66-fef325a15a25',  14),
                     ('ELEC', 'DSc', '901639ca-22f7-4fbb-86dd-ec22d2746053',  11) ]
@@ -136,24 +136,35 @@ major_names = { # BSc
                 'ELEC3052': 'Photonics and Nanotechnology',
                 'ELEC3059': 'Cloud and Network Infrastructures',
                 'ELEC3064': 'Smart Systems Integrated Solutions',
+                'ELEC3080': 'Health Robotics and Signal Processing',
                 # '': '',
 
                 'CHEM210'  : 'Biological and Chemical Engineering', # ???
-                'CHEM3022' : 'Biotechnology'
+                'CHEM3022' : 'Biotechnology',
+                # '': '',
+
+                'ENG25'    : 'Mechanical Engineering', # 2022-24 MSc Programme
+                # '': '',
+
+                'ARTSnm'   : "Master's Programme in New Media",
+                'ARTSam'   : "Master's Programme in Art and Media",
+                # '': '',
               }
 
 major_names_add = {
     'SCI3043':  ['Software and Service Engineering'],
-    'SCI3044':  ['Machine Learning, Data Science and Artificial Intelligence'],
+    'SCI3044':  ['Machine Learning, Data Science and Artificial Intelligence', 'Machine Learning'],
     'SCI3046':  ['Pelisuunnittelu ja pelinkehittäminen', 'Game Design and Production'],
-    'SCI3047':  ['Software Engineering and Architectures'], # ???
+    'SCI3047':  ['Software Engineering and Architectures', 'Strategy and Organisational Design'], # ??? ???
     'SCI3054':  ['Mathematics\xa0'], # this should be codified
     'SCI3070':  ['Machine Learning, Data Science and Artificial Intelligence (sivuaine)'],
     'SCI3073':  ['Analytics and Data Science'],
+    'SCI3102':  ['Visual Computing and Communication'],
     'SCI3108':  ['Tuotantotalous'], # ???
     'SCI3113':  ['Security and Cloud Computing'],
     'SCI3116':  ['Product and Innovation Management'],
     'ELEC3039': ['Avaruustiede ja -teknologia'],
+    'ARTSam'  : ['Taiteen ja median maisteriohjelma'],
 }
 
 # ??? Cloud and Network Infrastructures
@@ -323,7 +334,8 @@ def fetch_faculty(debug):
     if response.status_code!=200:
         return None
     html = response.text
-    print(html, file=open('faculty.html', 'w'))
+    if debug:
+        print(html, file=open('faculty.html', 'w'))
     l = []
     for k, v in alias.items():
         l.append(v)
@@ -414,15 +426,16 @@ def solve_major_code(rec, debug = False):
     if 'major_code' in rec:
         return rec['major_code']
 
-    if 'major' in rec:
-        mc = 'unsolvd'
-        m = rec['major'].lower()
-        if m in major_names_inv:
-            mc = major_names_inv[m]
-        if debug:
-            print(f'SOLVE MAJOR CODE {mc} {rec["major"]}')
-        # return f'?{rec["major"]:.6}'
-        return mc
+    mc = 'unsolvd'
+    for mdp in ['major', 'degree_programme']:
+        if rec.get(mdp, None):
+            m = rec[mdp].lower()
+            if m in major_names_inv:
+                mc = major_names_inv[m]
+            if debug:
+                print(f'SOLVE MAJOR CODE {mdp} : {mc} {rec.get("major", "NO MAJOR")} | {rec.get("degree_programme", "NO DEGREE PROGRAMME")}')
+            # return f'?{rec["major"]:.6}'
+            return mc
         
     # assert False, f'No major code, major="{rec['major']}"'
     
@@ -479,6 +492,8 @@ def fetch_one_thesis(s, l, li, ln, url_base, dump_raw, debug):
         d = html_to_dict(text)
         if not d:
             print(i, url, l, 'failed')
+            if debug:
+                print('    fetch_one_thesis() return A')
             return ({}, True)
 
     # print(i, url, l, d['author'], flush=True)
@@ -496,11 +511,15 @@ def fetch_one_thesis(s, l, li, ln, url_base, dump_raw, debug):
     mc = solve_major_code(d)
     if (y in years or 'all' in years) and (s[0] in schools or 'all' in schools) \
        and (major is None or mc==major):
+        if debug:
+            print('    fetch_one_thesis() return B')
         return (d, False, fetched)
     else:
+        if debug:
+            print(f'    fetch_one_thesis() y={y} years={years} s[0]={s[0]} schools={schools} major={major} mc={mc} return C')
         return ({}, True, fetched)
                                 
-def fetch_theses(max_pages, dump_raw, update, debug):
+def fetch_theses(max_pages, dump_raw, update, force, debug):
     n_try = 10
     rec = []
     for s in school_info:
@@ -525,7 +544,7 @@ def fetch_theses(max_pages, dump_raw, update, debug):
                     print(i, url, 'error', response.status_code)
                     continue
 
-                # open('index-page.html', 'w').write(response.text)
+                # open(f'index-page-{s[0]}-{i}.html', 'w').write(response.text)
                 if urlred is None:
                     urlred = response.url
                 ll = html_to_links(response.text)
@@ -535,6 +554,8 @@ def fetch_theses(max_pages, dump_raw, update, debug):
                 if len(ll)==0:
                     print(i, url, 'failed with no links...', 'retrying' if n<n_try else 'skipping')
 
+            if debug:
+                print(f'    found {len(ll)} links, cuntinuing if zero')
             if len(ll)<1:
                 continue
             
@@ -543,10 +564,18 @@ def fetch_theses(max_pages, dump_raw, update, debug):
             for li, l in enumerate(ll):
                 d, b, f = fetch_one_thesis(s, l, li, len(ll), url_base, dump_raw, debug)
                 do_break = do_break and b
+                if debug:
+                    print(f'    d={d} b={b} f={f}')
                 n_fetched += f
                 if d:
                     rec.append(d)
 
+            if debug:
+                print(f'    do_break={do_break} n_fetched={n_fetched} force={force} update={update}')  
+
+            if force:
+                continue
+                    
             if update and n_fetched==0:
                 print('  skipping the rest...')
                 do_break = True
@@ -1108,6 +1137,37 @@ def dump_alias_txt(f):
             
 # -----------------------------------------------------------------------------
 
+def embed_bert(t):
+    from sentence_transformers import SentenceTransformer
+    model = SentenceTransformer('paraphrase-MiniLM-L6-v2')
+    e = model.encode(t)
+    return e
+    
+def embed(t, e):
+    if e=='bert':
+        return embed_bert(t)
+
+    assert False, f'Embedding "{e}" unknown'
+
+def embed_and_save(t, e, f):
+    import numpy as np
+    d = embed(t, e)
+    # print(type(d))
+    np.save(f, d)
+
+def read_embed_and_save(f, e):
+    fj = f+'.json'
+    j = json.loads(open(fj).read())
+    a = j['abstract']
+    a = a.split(' | ')
+    a = a[0]
+
+    fx = f+'-'+e+'.npy'
+    embed_and_save(a, e, fx) 
+    print(f'Embedded {fj} -> {fx}')
+    
+# -----------------------------------------------------------------------------
+
 if __name__=="__main__":
     parser = argparse.ArgumentParser(description='Aalto CS Dept M.Sc. Thesis listing '
                                      +'per supervisor in 2021-25',
@@ -1122,6 +1182,8 @@ if __name__=="__main__":
                         help='fast version: no downloads, just read cached JSON files')
     parser.add_argument('-u', '--update', action='store_true',
                         help='download only newly added theses in the cache')
+    parser.add_argument('--force', action='store_true',
+                        help='force continuing all pages')
     parser.add_argument('-y', '--years', type=str,
                         help='select years (comma-separated or "all")')
     parser.add_argument('-c', '--schools', type=str,
@@ -1155,12 +1217,17 @@ if __name__=="__main__":
                         help='fetch Google Scholar data')
     parser.add_argument('--total_recall', action='store_true',
                         help='with --fast, processes all supervisors, not only CS department')
+    parser.add_argument('-e', '--embed', type=str,
+                        help='embed abstracts if not already done')
     args = parser.parse_args()
 
+    #read_embed_and_save('cache/msc/fff946f2-c797-42ab-8206-05f9d37456cc', 'bert')
+    #exit(0)
+    
     #print(edit_dist('abc', 'axbc'))
     #exit(0)
 
-    #print(fetch_google_data_inner('', True, True))
+    #print(fetch_google_data_inner('Jorma Laaksonen', True, True))
     #exit(0)
 
     #print(google_data(''))
@@ -1258,7 +1325,7 @@ if __name__=="__main__":
     
     if (args.theses is None and args.supervisors!='load') or args.theses=='dump':
         if not args.fast:
-            rec = fetch_theses(args.max, args.raw, args.update, args.debug)
+            rec = fetch_theses(args.max, args.raw, args.update, args.force, args.debug)
         else:
             rec = fetch_theses_cache(args.debug)
             if args.total_recall:
@@ -1295,6 +1362,11 @@ if __name__=="__main__":
             if i['issued'][:4] in years or 'all' in years: # major? school?
                 rec.append(i)
 
+    if args.embed:
+        r = rec[0]
+        print(r)
+        exit(0)
+                
     #print(rec)
 
     if args.student:
