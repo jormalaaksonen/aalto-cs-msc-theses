@@ -332,7 +332,7 @@ def fetch_faculty(debug):
     print(f'Scraping names of Aalto CS faculty members from {url}')
     response = requests.request('GET', url)
     if response.status_code!=200:
-        return None
+        return [] # None
     html = response.text
     if debug:
         print(html, file=open('faculty.html', 'w'))
@@ -510,7 +510,7 @@ def fetch_one_thesis(s, l, li, ln, url_base, dump_raw, debug):
     y  = d['issued'][:4]
     mc = solve_major_code(d)
     if (y in years or 'all' in years) and (s[0] in schools or 'all' in schools) \
-       and (major is None or mc==major):
+       and (major is None or mc in major):
         if debug:
             print('    fetch_one_thesis() return B')
         return (d, False, fetched)
@@ -592,7 +592,7 @@ def fetch_theses_cache(debug):
         ss = d.get('school', None)
         mc = solve_major_code(d, debug)
         if (y in years or 'all' in years) and (ss in schools or 'all' in schools) \
-           and (major is None or mc==major):
+           and (major is None or mc in major):
             r.append(d)
     rec = []
     for s in school_info:
@@ -726,7 +726,7 @@ def match_record(r, roles, debug = False):
         e = (swap_name(r['author']), r['title'], r['issued'], r['school'], mc, \
              av, ', '.join(r.get('keywords', [])), \
              r.get('abstract', '*** no abstract ***'), \
-             role)
+             role, r['cache_html'])
         theses[n].append(e)
         if debug:
             print('FOUND', n, ':', *e)
@@ -996,7 +996,61 @@ def fetch_google_data(debug):
                     except:
                         print(f'Appending "{gvalstr}" in {google_data_file} failed')
 
-def show_theses(detail, keywords, role, ntot, totrec):
+def show_plot(e, p):
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from sklearn.manifold import TSNE
+    
+    X = []
+    l = []
+    c = []
+    n = {}
+    for k, v in e.items():
+        # print(k, v[0].shape, v[1].shape, len(v[2]))
+        j = len(X)
+        X.append(v[0].flatten())
+        l.append((k.upper(), j))
+        n[j] = len(n)
+        c.append([j, j])
+        if v[1].shape[0]>1:
+            for i in range(v[1].shape[0]):
+                c.append([j, len(X)])
+                X.append(v[1][i])
+                nx = '*'
+                if True:
+                    nx = v[2][i].lower()
+                l.append((nx, j))
+            
+    X = np.array(X)
+    #print(X.shape)
+    Y = TSNE().fit_transform(X)
+    #print(Y.shape)
+
+    cmap = plt.get_cmap('gist_rainbow')
+    cc = cmap(np.linspace(0, 1, len(n)))
+    ccx = []
+    for r, (j, i) in enumerate(c):
+        #print(r, j, i, n[j])
+        ccx.append(cc[n[j]])
+    
+    fig, ax = plt.subplots()
+    ax.axis('equal')
+    ax.scatter(Y[:,0], Y[:,1], color=ccx)
+    for i, txt in enumerate(l):
+        x = Y[i,0]-0.05
+        y = Y[i,1]
+        ax.annotate(txt[0], (x, y), color=ccx[i])
+    for a, b in c:
+        #print(a, b, ccx[a])
+        xa = Y[a,0]
+        ya = Y[a,1]
+        xb = Y[b,0]
+        yb = Y[b,1]
+        ax.plot([xa, xb], [ya, yb], '-', color=ccx[a])
+
+    plt.show()
+    
+def show_theses(detail, keywords, role, ntot, totrec, plot):
     counts = []
     for p in people:
         m = ' '.join(sorted(majors[p])) if p in majors else ''
@@ -1006,6 +1060,8 @@ def show_theses(detail, keywords, role, ntot, totrec):
     sum = 0
     prev_n  = None
     prev_xi = None
+
+    emb_dict = {}
     
     for xi, i in enumerate(counts):
         group = i[2] # currently empty
@@ -1040,7 +1096,32 @@ def show_theses(detail, keywords, role, ntot, totrec):
                 if keywords:
                     print(f'. {j[5]}. {j[6]}. {j[7]}', end='')
                 print()
+
+        if plot:
+            import numpy as np
+
+            eall = []
+            enam = []
+            for j in theses[i[1]]:
+                fx = j[9]+'-'+plot+'.npy'
+                # print(fx)
+                if os.path.isfile(fx):
+                    e = np.load(fx)
+                    eall.append(e)
+                    enam.append(j[0])
+                else:
+                    print(f'Embedding does NOT {fx} exist')
+            if len(eall):
+                eall = np.array(eall)
+                emean = np.mean(eall, axis=0)
+                # print(eall.shape, emean.shape)
+                emb_dict[i[1]] = [ emean, eall, enam ]
+
     print(f'{sum:3d} TOTAL (from {ntot} theses)')
+
+    if plot:
+        show_plot(emb_dict, plot)
+
 
 split = {}
 per_major_code = {}
@@ -1166,6 +1247,13 @@ def read_embed_and_save(f, e):
     embed_and_save(a, e, fx) 
     print(f'Embedded {fj} -> {fx}')
     
+def check_read_embed_and_save(f, e):
+    fx = f+'-'+e+'.npy'
+    if os.path.isfile(fx):
+        print(f'Embedding {fx} exists')
+    else:
+        read_embed_and_save(f, e) 
+    
 # -----------------------------------------------------------------------------
 
 if __name__=="__main__":
@@ -1219,6 +1307,8 @@ if __name__=="__main__":
                         help='with --fast, processes all supervisors, not only CS department')
     parser.add_argument('-e', '--embed', type=str,
                         help='embed abstracts if not already done')
+    parser.add_argument('--plot', type=str,
+                        help='plot embeddings in 2D')
     args = parser.parse_args()
 
     #read_embed_and_save('cache/msc/fff946f2-c797-42ab-8206-05f9d37456cc', 'bert')
@@ -1273,7 +1363,7 @@ if __name__=="__main__":
         schools = args.schools.split(',')
 
     if args.major:
-        major = args.major
+        major = args.major.split(',')
 
     alines = []
     if os.path.isfile('alias.txt'):
@@ -1363,10 +1453,11 @@ if __name__=="__main__":
                 rec.append(i)
 
     if args.embed:
-        r = rec[0]
-        print(r)
-        exit(0)
-                
+        for i in rec:
+            if i.get('issued', 'xxxx')[:4] in years and solve_major_code(i).find('SCI3')==0:
+                f = i['cache_html']
+                check_read_embed_and_save(f, args.embed)
+
     #print(rec)
 
     if args.student:
@@ -1393,7 +1484,8 @@ if __name__=="__main__":
 
     #find_majors()
 
-    show_theses(args.detail, args.keywords, args.dsc or args.roles, len(rec), args.total_recall)
+    show_theses(args.detail, args.keywords, args.dsc or args.roles, len(rec),
+                args.total_recall, args.plot)
 
     split_theses()
 
